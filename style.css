@@ -2000,3 +2000,177 @@ mark {
         grid-template-columns: 1fr;
     }
 }
+
+/* =========================================================
+   CORREÇÃO DA TABELA DE CONTRATOS
+   Remove o scroll horizontal
+========================================================= */
+
+html,
+body {
+    max-width: 100%;
+    overflow-x: clip;
+}
+
+.contract-section,
+.contract-results,
+.contract-table-wrapper,
+.contracts-table-wrapper,
+.contract-table,
+.contracts-table,
+.contract-list {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* O conteúdo deve se ajustar, não criar scroll */
+.contract-table-wrapper,
+.contracts-table-wrapper {
+    overflow-x: visible;
+}
+
+/* Cabeçalho e linhas da tabela */
+.contract-table-header,
+.contracts-table-header,
+.contract-table-row,
+.contracts-table-row,
+.contract-row {
+    display: grid;
+
+    /*
+       8 colunas:
+       contrato | descrição | responsável | unidade
+       itens | término | status | botão
+    */
+    grid-template-columns:
+        minmax(0, 0.85fr)
+        minmax(0, 2.25fr)
+        minmax(0, 1.25fr)
+        minmax(0, 1.35fr)
+        minmax(0, 0.48fr)
+        minmax(0, 0.85fr)
+        minmax(0, 0.65fr)
+        minmax(0, 0.82fr);
+
+    width: 100%;
+    min-width: 0;
+    column-gap: 10px;
+}
+
+/* Permite que todas as colunas diminuam */
+.contract-table-header > *,
+.contracts-table-header > *,
+.contract-table-row > *,
+.contracts-table-row > *,
+.contract-row > * {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Textos grandes podem quebrar linha */
+.contract-table-row strong,
+.contract-table-row p,
+.contracts-table-row strong,
+.contracts-table-row p,
+.contract-row strong,
+.contract-row p,
+.contract-description,
+.contract-supplier,
+.contract-responsible,
+.contract-unit {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+/* Cabeçalho mais compacto */
+.contract-table-header,
+.contracts-table-header {
+    padding: 14px 12px;
+    font-size: 0.72rem;
+    line-height: 1.25;
+}
+
+/* Linhas mais compactas */
+.contract-table-row,
+.contracts-table-row,
+.contract-row {
+    padding: 16px 12px;
+    font-size: 0.84rem;
+    line-height: 1.4;
+}
+
+/* Quantidade de itens centralizada */
+.contract-items,
+.contract-items-count {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Status sem criar largura extra */
+.contract-status,
+.status-badge {
+    min-width: 0;
+    max-width: 100%;
+    padding-inline: 9px;
+    font-size: 0.7rem;
+    white-space: normal;
+    text-align: center;
+}
+
+/* Botão de detalhes deve caber na última coluna */
+.contract-details-button,
+.contract-detail-button,
+.contract-action button,
+.contract-table-row button,
+.contracts-table-row button,
+.contract-row button {
+    width: 100%;
+    min-width: 0;
+    max-width: 108px;
+    padding: 10px 7px;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    white-space: normal;
+    text-align: center;
+}
+
+/* Ajuste para notebooks */
+@media (min-width: 961px) and (max-width: 1250px) {
+    .contract-table-header,
+    .contracts-table-header,
+    .contract-table-row,
+    .contracts-table-row,
+    .contract-row {
+        grid-template-columns:
+            minmax(0, 0.78fr)
+            minmax(0, 2fr)
+            minmax(0, 1.15fr)
+            minmax(0, 1.2fr)
+            minmax(0, 0.42fr)
+            minmax(0, 0.78fr)
+            minmax(0, 0.58fr)
+            minmax(0, 0.72fr);
+
+        column-gap: 8px;
+    }
+
+    .contract-table-row,
+    .contracts-table-row,
+    .contract-row {
+        font-size: 0.78rem;
+    }
+
+    .contract-details-button,
+    .contract-detail-button,
+    .contract-action button,
+    .contract-table-row button,
+    .contracts-table-row button,
+    .contract-row button {
+        padding-inline: 5px;
+        font-size: 0.7rem;
+    }
+}
