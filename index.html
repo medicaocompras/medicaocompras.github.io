@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Portal interno para consulta de contratos, descrições, responsáveis e itens da Brasilata.">
+    <title>Consulta de Contratos | Brasilata</title>
+
+    <link rel="stylesheet" href="style.css?v=20260728-all-contracts">
+    <script src="config.js?v=20260728-all-contracts" defer></script>
+    <script src="tutorials.js?v=20260728-all-contracts" defer></script>
+    <script src="contractsData.js?v=20260728-all-contracts" defer></script>
+    <script src="script.js?v=20260728-all-contracts" defer></script>
+</head>
+<body>
+    <a class="skip-link" href="#mainContent">Pular para o conteúdo principal</a>
+
+    <header class="app-header">
+        <div class="container header-content">
+            <a class="brand" href="#mainContent" aria-label="Brasilata — Medição de Contratos">
+                <span class="brand-mark" aria-hidden="true">
+                    <img src="assets/brasilata-symbol.png" alt="">
+                </span>
+                <span class="brand-copy">
+                    <strong>Medição de Contratos</strong>
+                </span>
+            </a>
+
+            <nav id="appNavigation" class="app-navigation hidden" aria-label="Navegação principal">
+                <button class="navigation-tab is-active" type="button" data-view="contracts" aria-controls="contractsView" aria-current="page">
+                    Contratos
+                </button>
+                <button class="navigation-tab" type="button" data-view="tutorial" aria-controls="tutorialView">
+                    Tutorial
+                </button>
+                <a class="navigation-support" href="https://teams.microsoft.com/l/chat/0/0?users=lucas.melo@brasilata.com.br" target="_blank" rel="noopener noreferrer">
+                    Ajuda
+                </a>
+            </nav>
+
+            <div id="userArea" class="user-area hidden" aria-label="Sessão do usuário">
+                <span class="user-avatar" aria-hidden="true">U</span>
+                <span id="userName" class="user-name"></span>
+                <button id="logoutButton" class="button button-header button-small" type="button">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <main id="mainContent">
+        <section id="loginSection" class="login-section" aria-labelledby="loginTitle">
+            <div class="container login-container">
+                <div class="login-introduction">
+                    <p class="eyebrow">Conteúdo interno</p>
+                    <h1>Consulte todos os contratos e seus itens com rapidez.</h1>
+                    <p class="login-introduction-text">
+                        Encontre contratos, descrições, fornecedores, responsáveis, unidades e itens em uma única tela.
+                    </p>
+
+                    <ul class="login-benefits" aria-label="Recursos disponíveis">
+                        <li><span aria-hidden="true">✓</span> Pesquisa rápida por vários campos</li>
+                        <li><span aria-hidden="true">✓</span> Filtros e status de vencimento</li>
+                        <li><span aria-hidden="true">✓</span> Tutorial disponível quando necessário</li>
+                    </ul>
+                </div>
+
+                <div class="login-card">
+                    <div class="login-card-header">
+                        <div class="login-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="4" y="10" width="16" height="11" rx="2"></rect>
+                                <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="eyebrow eyebrow-dark">Acesso interno</p>
+                            <h2 id="loginTitle">Acessar portal</h2>
+                        </div>
+                    </div>
+
+                    <p class="login-description">Use seu e-mail corporativo e o código de acesso interno.</p>
+
+                    <form id="accessForm" class="access-form" novalidate>
+                        <div class="form-group">
+                            <label for="emailInput">E-mail corporativo</label>
+                            <input id="emailInput" name="email" type="email" placeholder="nome@empresa.com.br" autocomplete="email" inputmode="email" aria-describedby="emailHelp" required>
+                            <span id="emailHelp" class="field-help">Utilize um domínio corporativo autorizado.</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="accessCodeInput">Código de acesso</label>
+                            <div class="password-field">
+                                <input id="accessCodeInput" name="accessCode" type="password" placeholder="Digite o código interno" autocomplete="current-password" required>
+                                <button id="togglePasswordButton" class="password-toggle" type="button" aria-label="Mostrar código de acesso" aria-pressed="false">Mostrar</button>
+                            </div>
+                        </div>
+
+                        <button id="loginButton" class="button button-primary button-full" type="submit">
+                            <span>Entrar no portal</span><span aria-hidden="true">→</span>
+                        </button>
+                    </form>
+
+                    <p id="loginMessage" class="message" role="status" aria-live="polite"></p>
+                    <p class="security-note">
+                        Esta tela organiza o acesso no site. A proteção corporativa real depende do ambiente de publicação.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section id="appSection" class="portal-section hidden" aria-labelledby="portalTitle">
+            <div class="container">
+                <section id="contractsView" class="app-view" data-view-panel="contracts">
+                    <header class="page-heading">
+                        <div>
+                            <p class="eyebrow eyebrow-dark">Consulta de contratos</p>
+                            <h1 id="portalTitle" tabindex="-1">Encontre o contrato certo</h1>
+                            <p>Pesquise por contrato, descrição ou item e confira responsáveis, unidades e vencimentos.</p>
+                        </div>
+                        <a class="button button-secondary" href="https://teams.microsoft.com/l/chat/0/0?users=lucas.melo@brasilata.com.br" target="_blank" rel="noopener noreferrer">Tirar uma dúvida</a>
+                    </header>
+
+                    <section class="contract-section" aria-labelledby="contractTitle">
+                        <div class="visually-hidden">
+                            <h2 id="contractTitle">Pesquisar contratos</h2>
+                        </div>
+
+                        <form id="contractFilters" class="contract-filter-panel" role="search">
+                            <div class="search-toolbar">
+                                <div class="contract-search-group">
+                                    <label for="contractSearchInput">Pesquisa geral</label>
+                                    <div class="search-field">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <circle cx="11" cy="11" r="8"></circle>
+                                            <path d="m21 21-4.35-4.35"></path>
+                                        </svg>
+                                        <input id="contractSearchInput" type="search" placeholder="Contrato, descrição, fornecedor, responsável ou item" autocomplete="off" spellcheck="false" aria-describedby="contractSearchHelp">
+                                        <button id="clearContractSearch" class="clear-search hidden" type="button" aria-label="Limpar texto da pesquisa">×</button>
+                                    </div>
+                                </div>
+
+                                <button id="mobileFiltersButton" class="button button-secondary mobile-filter-button" type="button" aria-expanded="false" aria-controls="advancedFilters">
+                                    Filtros <span id="mobileFilterCount" class="filter-count hidden">0</span>
+                                </button>
+
+                                <div class="sort-field">
+                                    <label for="sortFilter">Ordenar por</label>
+                                    <select id="sortFilter">
+                                        <option value="urgency">Urgência</option>
+                                        <option value="end-asc">Término mais próximo</option>
+                                        <option value="end-desc">Término mais distante</option>
+                                        <option value="contract-asc">Número do contrato</option>
+                                        <option value="supplier-asc">Fornecedor de A a Z</option>
+                                        <option value="responsible-asc">Responsável de A a Z</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div id="advancedFilters" class="advanced-filters">
+                                <div class="contract-filter-grid">
+                                    <div class="filter-field">
+                                        <label for="responsibleFilter">Responsável</label>
+                                        <select id="responsibleFilter"><option value="">Todos os responsáveis</option></select>
+                                    </div>
+                                    <div class="filter-field">
+                                        <label for="statusFilter">Status</label>
+                                        <select id="statusFilter">
+                                            <option value="">Todos os status</option>
+                                            <option value="ativo">Ativos</option>
+                                            <option value="proximo">Próximos do vencimento</option>
+                                            <option value="vencido">Vencidos</option>
+                                            <option value="sem-data">Sem data de término</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-field">
+                                        <label for="establishmentFilter">Estabelecimento</label>
+                                        <select id="establishmentFilter"><option value="">Todos os estabelecimentos</option></select>
+                                    </div>
+                                    <div class="filter-field">
+                                        <label for="categoryFilter">Tipo de contrato</label>
+                                        <select id="categoryFilter"><option value="">Todos os tipos</option></select>
+                                    </div>
+                                </div>
+
+                                <div class="contract-filter-footer">
+                                    <span id="contractSearchHelp">A pesquisa aceita texto parcial e ignora acentos. “Próximo do vencimento” significa até 90 dias.</span>
+                                    <button id="clearContractFilters" class="button button-secondary button-small" type="button">Limpar filtros</button>
+                                </div>
+                            </div>
+                        </form>
+
+                        <div id="activeFilters" class="active-filters hidden" aria-label="Filtros aplicados"></div>
+
+                        <div class="contract-summary" aria-label="Resumo dos contratos filtrados">
+                            <button class="summary-card is-active" type="button" data-summary-status="" aria-pressed="true">
+                                <span class="summary-label">Todos</span><strong id="totalContractsCount">0</strong>
+                            </button>
+                            <button class="summary-card summary-active" type="button" data-summary-status="ativo" aria-pressed="false">
+                                <span class="summary-label">Ativos</span><strong id="activeContractsCount">0</strong>
+                            </button>
+                            <button class="summary-card summary-soon" type="button" data-summary-status="proximo" aria-pressed="false">
+                                <span class="summary-label">Próximos</span><strong id="soonContractsCount">0</strong>
+                            </button>
+                            <button class="summary-card summary-expired" type="button" data-summary-status="vencido" aria-pressed="false">
+                                <span class="summary-label">Vencidos</span><strong id="expiredContractsCount">0</strong>
+                            </button>
+                        </div>
+
+                        <div class="contract-results-header">
+                            <div>
+                                <strong id="contractResultCount" class="result-count" aria-live="polite"></strong>
+                                <span id="sortDescription" class="sort-description"></span>
+                            </div>
+                            <span id="contractDataSource" class="data-source-note"></span>
+                        </div>
+
+                        <div id="contractTableContainer" class="table-shell" aria-label="Tabela de contratos">
+                            <table class="contract-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Contrato</th>
+                                        <th scope="col">Descrição e fornecedor</th>
+                                        <th scope="col">Responsável</th>
+                                        <th scope="col">Unidade</th>
+                                        <th scope="col">Itens</th>
+                                        <th scope="col">Término</th>
+                                        <th scope="col">Status</th>
+                                        <th scope="col"><span class="visually-hidden">Ações</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="contractTableBody"></tbody>
+                            </table>
+                        </div>
+
+                        <div id="contractCardList" class="contract-card-list"></div>
+
+                        <noscript>
+                            <div class="contract-state contract-load-error">
+                                <h3>JavaScript desativado</h3>
+                                <p>Ative o JavaScript do navegador para consultar os contratos.</p>
+                            </div>
+                        </noscript>
+
+                        <div id="contractEmptyState" class="contract-state hidden">
+                            <div class="state-icon" aria-hidden="true">!</div>
+                            <h3>Nenhum contrato encontrado</h3>
+                            <p id="emptyStateMessage">Tente remover um filtro ou usar uma parte menor do texto.</p>
+                            <button id="emptyStateClearFilters" class="button button-secondary" type="button">Limpar filtros</button>
+                        </div>
+
+                        <nav id="pagination" class="pagination hidden" aria-label="Paginação dos contratos">
+                            <button id="previousPageButton" class="button button-secondary button-small" type="button">← Anterior</button>
+                            <span id="pageInformation" aria-live="polite"></span>
+                            <button id="nextPageButton" class="button button-secondary button-small" type="button">Próxima →</button>
+                        </nav>
+                    </section>
+                </section>
+
+                <section id="tutorialView" class="app-view hidden" data-view-panel="tutorial" aria-labelledby="tutorialTitle">
+                    <header class="page-heading tutorial-page-heading">
+                        <div>
+                            <p class="eyebrow eyebrow-dark">Tutorial</p>
+                            <h1 id="tutorialTitle" tabindex="-1">Medição de Contratos</h1>
+                            <p id="tutorialDescription">Aprenda como realizar a medição de contratos corretamente.</p>
+                        </div>
+                        <button class="button button-secondary" type="button" data-view="contracts">Voltar aos contratos</button>
+                    </header>
+
+                    <article class="video-card">
+                        <div class="video-card-header">
+                            <span class="content-badge">Vídeo principal</span>
+                            <h2>Assista quando precisar</h2>
+                            <p>O vídeo só será carregado depois do clique, reduzindo o uso de dados e deixando a consulta mais rápida.</p>
+                        </div>
+
+                        <div id="videoWrapper" class="video-wrapper video-placeholder">
+                            <div class="video-placeholder-content">
+                                <span class="play-icon" aria-hidden="true">▶</span>
+                                <strong>Tutorial de Medição de Contratos</strong>
+                                <button id="loadVideoButton" class="button button-primary" type="button">Reproduzir tutorial</button>
+                            </div>
+                        </div>
+                    </article>
+
+                    <section class="steps-section" aria-labelledby="stepsTitle">
+                        <div class="section-heading">
+                            <div>
+                                <p class="eyebrow eyebrow-dark">Passo a passo</p>
+                                <h2 id="stepsTitle">Use o portal com facilidade</h2>
+                            </div>
+                            <p>A consulta fica disponível na aba Contratos durante todo o processo.</p>
+                        </div>
+
+                        <ol class="steps-list">
+                            <li class="step-card"><span class="step-number" aria-hidden="true">1</span><div><h3>Assista ao processo</h3><p>Veja a sequência correta para realizar a medição.</p></div></li>
+                            <li class="step-card"><span class="step-number" aria-hidden="true">2</span><div><h3>Pesquise o contrato</h3><p>Use número, fornecedor ou responsável para localizar o registro.</p></div></li>
+                            <li class="step-card"><span class="step-number" aria-hidden="true">3</span><div><h3>Confira os detalhes</h3><p>Valide unidade, responsável, suplente, datas e informações contábeis.</p></div></li>
+                        </ol>
+                    </section>
+                </section>
+            </div>
+        </section>
+    </main>
+
+    <dialog id="contractDialog" class="contract-dialog" aria-labelledby="dialogTitle">
+        <div class="dialog-header">
+            <div>
+                <p class="eyebrow eyebrow-dark">Detalhes do contrato</p>
+                <h2 id="dialogTitle">Contrato</h2>
+            </div>
+            <button id="closeContractDialog" class="dialog-close" type="button" aria-label="Fechar detalhes">×</button>
+        </div>
+        <div id="contractDialogContent" class="dialog-content"></div>
+    </dialog>
+
+    <footer id="appFooter" class="app-footer hidden">
+        <div class="container footer-content">
+            <p><strong>Brasilata</strong><span>Conteúdo de uso interno</span></p>
+            <a class="back-to-top" href="#mainContent">Voltar ao início ↑</a>
+        </div>
+    </footer>
+</body>
+</html>
