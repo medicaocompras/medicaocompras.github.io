@@ -1,49 +1,43 @@
-# Segurança e publicação
+# Segurança
 
-## Situação atual
+## Modelo atual
 
-O projeto é um site estático. A validação de e-mail e código acontece em JavaScript no navegador.
+O site pode ser hospedado no GitHub Pages porque não contém os contratos.
 
-Esse mecanismo pode organizar o acesso visual, mas não protege os arquivos. Quem conseguir abrir o site também pode tentar acessar diretamente:
+O acesso aos dados acontece somente depois que o usuário entra com uma conta Microsoft corporativa. O navegador solicita um token delegado e consulta o Microsoft Graph. O Graph aplica as permissões reais que o usuário possui no SharePoint.
 
-```text
-contractsData.js
-config.js
-script.js
-```
+## O que pode ficar no GitHub
 
-O hash do código de acesso também fica disponível no front-end.
+- `clientId`;
+- `tenantId`;
+- hostname, caminho do site, biblioteca e nome do arquivo;
+- HTML, CSS e JavaScript do portal.
 
-## GitHub Pages
+Esses identificadores não concedem acesso sozinhos.
 
-Não utilize GitHub Pages para dados internos ou confidenciais. Mesmo um repositório privado não transforma uma página publicada pelo GitHub Pages em um sistema corporativo seguro para esse caso.
+## O que nunca deve ficar no GitHub
 
-## Opções recomendadas
+- client secret;
+- senha;
+- access token;
+- refresh token;
+- certificado privado;
+- conteúdo exportado da planilha;
+- arquivos com contratos internos.
 
-### SharePoint ou Microsoft 365
+## Permissões
 
-Publique a solução em uma área acessível somente aos grupos autorizados. Para uma integração mais completa, transforme a interface em um componente SPFx e use as permissões do Microsoft 365.
+O aplicativo solicita permissões delegadas:
 
-### Microsoft Entra ID
+- `User.Read`;
+- `Sites.Read.All`.
 
-Registre uma aplicação, configure os usuários ou grupos autorizados e use MSAL para autenticação. Os dados devem ser servidos por uma API protegida, não por um arquivo JavaScript público.
+Mesmo com essas permissões, o usuário somente consegue ler conteúdo ao qual sua conta possui acesso.
 
-### IIS ou servidor interno
+## Sessão
 
-Hospede o site e os dados em uma rede interna com autenticação Windows, controle de grupos e regras de acesso.
+O MSAL usa `sessionStorage`. A sessão não é compartilhada permanentemente entre todas as janelas e é removida ao encerrar a sessão do navegador.
 
-## Arquitetura ideal
+## Bibliotecas externas
 
-```text
-Usuário corporativo
-        ↓
-Microsoft Entra ID / autenticação interna
-        ↓
-Site protegido
-        ↓
-API protegida
-        ↓
-Banco de dados ou arquivo em área privada
-```
-
-Nessa arquitetura, `contractsData.js` deve ser substituído por uma chamada autenticada à API.
+O projeto carrega MSAL da CDN da Microsoft com validação de integridade SRI e carrega SheetJS da CDN oficial. Em um ambiente corporativo com política rígida, recomenda-se baixar as bibliotecas e servi-las junto ao projeto.

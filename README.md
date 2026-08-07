@@ -1,107 +1,97 @@
-# Consulta de Contratos — Brasilata
+# Portal de Medição de Contratos
 
-Portal estático para consultar contratos exportados do Paradigma SRM360.
+Portal estático para consultar contratos diretamente de uma planilha protegida no SharePoint.
 
-## Base atual
+## O que mudou
 
-- 721 contratos consolidados;
-- 3.891 itens;
-- 529 fornecedores;
-- 9 estabelecimentos;
-- 448 contratos de serviço;
-- 273 contratos de compra.
+A versão anterior publicava todos os contratos dentro de `contractsData.js`. Esta versão remove essa base estática.
 
-Cada contrato aparece apenas uma vez na pesquisa. As linhas repetidas da planilha representam itens e ficam agrupadas na janela **Ver detalhes e itens**.
+Agora o portal:
 
-## Como abrir
+- autentica o usuário pelo Microsoft Entra ID;
+- consulta o SharePoint pelo Microsoft Graph;
+- baixa a versão atual do Excel;
+- lê a aba `Planilha1` no navegador;
+- recria os contratos somente em memória;
+- verifica mudanças automaticamente a cada 5 minutos;
+- verifica novamente quando o usuário volta à aba;
+- permite atualização manual pelo botão **Atualizar agora**.
 
-Abra `index.html` em um servidor local ou publique os arquivos no ambiente escolhido.
+## Estrutura
 
-Exemplo com Python:
+```text
+.
+├── index.html
+├── style.css
+├── script.js
+├── config.js
+├── contractsMapper.js
+├── sharepointData.js
+├── tutorials.js
+├── CONFIGURACAO_SHAREPOINT.md
+├── SECURITY.md
+├── assets/
+│   └── brasilata-symbol.png
+└── tests/
+    ├── application-smoke.test.js
+    ├── contracts-mapper.test.js
+    └── contracts-search.test.js
+```
+
+## Configuração obrigatória
+
+Preencha no `config.js`:
+
+```javascript
+clientId: "COLE_AQUI_O_CLIENT_ID",
+tenantId: "COLE_AQUI_O_TENANT_ID",
+```
+
+Depois registre a URL exata do GitHub Pages como **Single-page application — SPA** no Microsoft Entra ID.
+
+O passo a passo completo está em `CONFIGURACAO_SHAREPOINT.md`.
+
+## Caminho configurado
+
+```text
+https://brasilatacorp.sharepoint.com/sites/Departamentos
+└── Documentos Partilhados
+    └── Unidade_SP
+        └── ESC
+            └── 05_CONTRATOS
+                └── Contratos TI - Responsáveis Medição.xlsx
+```
+
+A aba usada é `Planilha1`.
+
+## Executar localmente
+
+Cadastre `http://localhost:8000/` como URI SPA e execute:
 
 ```bash
 python -m http.server 8000
 ```
 
-Depois acesse `http://localhost:8000`.
+Abra:
 
-## Pesquisa
-
-A pesquisa geral aceita texto parcial e ignora diferenças de acentos e letras maiúsculas. Ela pesquisa por:
-
-- número do contrato;
-- descrição do contrato;
-- fornecedor e CNPJ;
-- responsável e gestor;
-- empresa e estabelecimento;
-- tipo de contrato;
-- descrição dos itens;
-- datas e demais classificações.
-
-Quando a pesquisa encontra um termo dentro de um item, o resultado principal mostra **Item relacionado** para explicar por que o contrato apareceu.
-
-## Detalhes e itens
-
-O botão **Ver detalhes e itens** abre:
-
-- descrição do contrato;
-- fornecedor e CNPJ;
-- responsável e gestor;
-- empresa e estabelecimento;
-- datas;
-- tipo e situação;
-- valor total e saldo;
-- indicadores de quantidade;
-- todos os itens agrupados.
-
-A área de itens possui pesquisa própria e carregamento progressivo. No computador os itens aparecem em tabela; no celular aparecem em cards.
-
-## Atualizar a base futuramente
-
-Coloque o novo relatório XLSX em uma pasta acessível e execute:
-
-```bash
-python tools/generate_contracts_data.py "EXP13_(Paradigma SRM360 - brasilata).xlsx"
+```text
+http://localhost:8000/
 ```
 
-O comando substitui `contractsData.js`.
-
-Depois:
-
-1. Verifique os totais exibidos pelo comando.
-2. Execute os testes.
-3. Publique todos os arquivos atualizados.
-4. Use `Ctrl + F5` no navegador para ignorar cache antigo.
-
-## Executar testes
+## Testes
 
 ```bash
-node --check script.js
-node --check contractsData.js
 node tests/application-smoke.test.js
+node tests/contracts-mapper.test.js
 node tests/contracts-search.test.js
 ```
 
-## Regra de consolidação
+## Bibliotecas usadas
 
-Um contrato é identificado pela combinação:
+- Microsoft Authentication Library for JavaScript (MSAL Browser);
+- Microsoft Graph;
+- SheetJS Community Edition para leitura do `.xlsx` no navegador.
 
-```text
-Número + CNPJ da empresa contratada + CNPJ da empresa contratante
-```
+## Importante
 
-Essa combinação é necessária porque alguns números de contrato aparecem em empresas ou fornecedores diferentes.
-
-## Arquivos principais
-
-- `index.html`: estrutura da interface;
-- `style.css`: design e responsividade;
-- `script.js`: pesquisa, filtros, paginação, detalhes e itens;
-- `contractsData.js`: contratos e itens convertidos da planilha;
-- `tools/generate_contracts_data.py`: importador do relatório;
-- `tests/`: testes automatizados;
-- `SECURITY.md`: limitações de segurança de uma hospedagem estática.
-
-## Segurança
-
-A tela de login feita somente com HTML e JavaScript não protege os dados de um site estático. Não publique `contractsData.js` no GitHub Pages caso os contratos sejam confidenciais. Consulte `SECURITY.md`.
+Não coloque segredo de aplicativo no projeto. Aplicações SPA usam autenticação delegada sem `client secret`.

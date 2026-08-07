@@ -1,10 +1,39 @@
-const APP_CONFIG = {
-    allowedDomains: [
-        "brasilata.com.br",
-        "cimep.com.br"
-    ],
-    accessCodeHash: "58f72a616a902e335a6e862e4d6b98be25618731da5c21fbb07aa653074b3a05",
+"use strict";
 
-    sessionKey: "brasilata_tutorial_access",
-    sessionEmailKey: "brasilata_tutorial_email"
-};
+function getApplicationRootUrl() {
+    const path = window.location.pathname;
+
+    if (path.endsWith("/")) {
+        return `${window.location.origin}${path}`;
+    }
+
+    const lastSlash = path.lastIndexOf("/");
+    return `${window.location.origin}${path.slice(0, lastSlash + 1)}`;
+}
+
+const APP_CONFIG = Object.freeze({
+    auth: Object.freeze({
+        // Entra ID > Registros de aplicativo > Visão geral > ID do aplicativo (cliente)
+        clientId: "3083d2ab-ae97-41af-8bb3-1bf8beeecd8f",
+
+        // Entra ID > Visão geral > ID do locatário (tenant)
+        tenantId: "b290d65a-e9bb-439f-8678-5044b213655f",
+
+        // Deve estar cadastrado como URI de redirecionamento do tipo SPA no Entra ID.
+        redirectUri: getApplicationRootUrl(),
+
+        // O acesso continua limitado aos arquivos que o usuário já pode abrir no SharePoint.
+        graphScopes: Object.freeze(["User.Read", "Sites.Read.All"])
+    }),
+
+    sharePoint: Object.freeze({
+        hostname: "brasilatacorp.sharepoint.com",
+        sitePath: "/sites/Departamentos",
+        documentLibraryName: "Documentos",
+        filePath: "Unidade_SP/ESC/05_CONTRATOS/Paradigma_Contratos.xlsx",
+        worksheetName: "Report - Contrato – Relatório d",
+
+        // Atualização periódica. O site também verifica quando a aba volta a ficar ativa.
+        refreshIntervalMs: 5 * 60 * 1000
+    })
+});

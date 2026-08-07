@@ -6,11 +6,8 @@ const elements = {
     appFooter: document.getElementById("appFooter"),
     appNavigation: document.getElementById("appNavigation"),
     accessForm: document.getElementById("accessForm"),
-    emailInput: document.getElementById("emailInput"),
-    accessCodeInput: document.getElementById("accessCodeInput"),
     loginButton: document.getElementById("loginButton"),
     loginMessage: document.getElementById("loginMessage"),
-    togglePasswordButton: document.getElementById("togglePasswordButton"),
     userArea: document.getElementById("userArea"),
     userName: document.getElementById("userName"),
     logoutButton: document.getElementById("logoutButton"),
@@ -43,6 +40,7 @@ const elements = {
     contractResultCount: document.getElementById("contractResultCount"),
     sortDescription: document.getElementById("sortDescription"),
     contractDataSource: document.getElementById("contractDataSource"),
+    refreshContractsButton: document.getElementById("refreshContractsButton"),
     totalContractsCount: document.getElementById("totalContractsCount"),
     activeContractsCount: document.getElementById("activeContractsCount"),
     soonContractsCount: document.getElementById("soonContractsCount"),
@@ -63,7 +61,6 @@ const state = {
     filteredContracts: [],
     supplierResponsibleIndex: new Map(),
     contractIdMap: new WeakMap(),
-    contractSearchIndex: new WeakMap(),
     currentPage: 1,
     pageSize: getResponsivePageSize(),
     contractsInitialized: false,
@@ -71,9 +68,8 @@ const state = {
     videoLoaded: false,
     filtersRestored: false,
     lastDialogTrigger: null,
-    activeDialogContract: null,
-    dialogItemQuery: "",
-    dialogItemsVisible: 20
+    dataRefreshTimer: null,
+    dataLoadInProgress: false
 };
 
 const sortLabels = {
@@ -229,15 +225,6 @@ function highlightText(value, rawQuery) {
     return markup;
 }
 
-async function createSha256Hash(value) {
-    const encodedValue = new TextEncoder().encode(value);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", encodedValue);
-
-    return Array.from(new Uint8Array(hashBuffer))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
-}
-
 function setLoginMessage(message = "", type = "error") {
     elements.loginMessage.textContent = message;
     elements.loginMessage.classList.toggle("success", type === "success");
@@ -246,97 +233,35 @@ function setLoginMessage(message = "", type = "error") {
 function setLoginLoading(isLoading) {
     elements.loginButton.disabled = isLoading;
     elements.loginButton.innerHTML = isLoading
-        ? "<span>Validando acesso...</span>"
-        : "<span>Entrar no portal</span><span aria-hidden=\"true\">→</span>";
-}
-
-function setInputValidity(input, isValid) {
-    input.setAttribute("aria-invalid", String(!isValid));
-}
-
-function hasActiveSession() {
-    return sessionStorage.getItem(APP_CONFIG.sessionKey) === "true";
-}
-
-function getSessionEmail() {
-    return sessionStorage.getItem(APP_CONFIG.sessionEmailKey) || "";
-}
-
-function createSession(email) {
-    sessionStorage.setItem(APP_CONFIG.sessionKey, "true");
-    sessionStorage.setItem(APP_CONFIG.sessionEmailKey, normalizeEmail(email));
-}
-
-function clearSession() {
-    sessionStorage.removeItem(APP_CONFIG.sessionKey);
-    sessionStorage.removeItem(APP_CONFIG.sessionEmailKey);
+        ? "<span>Redirecionando para a Microsoft...</span>"
+        : `<span class="microsoft-symbol" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+           <span>Entrar com a Microsoft</span>`;
 }
 
 async function handleLogin(event) {
     event.preventDefault();
     setLoginMessage();
-
-    const email = normalizeEmail(elements.emailInput.value);
-    const accessCode = elements.accessCodeInput.value;
-    const emailIsValid = isAllowedCorporateEmail(email);
-    const codeWasEntered = accessCode.length > 0;
-
-    setInputValidity(elements.emailInput, emailIsValid);
-    setInputValidity(elements.accessCodeInput, codeWasEntered);
-
-    if (!emailIsValid) {
-        setLoginMessage("Informe um e-mail corporativo autorizado.");
-        elements.emailInput.focus();
-        return;
-    }
-
-    if (!codeWasEntered) {
-        setLoginMessage("Informe o código de acesso interno.");
-        elements.accessCodeInput.focus();
-        return;
-    }
-
     setLoginLoading(true);
 
     try {
-        const accessCodeHash = await createSha256Hash(accessCode);
-
-        if (accessCodeHash !== APP_CONFIG.accessCodeHash) {
-            setInputValidity(elements.accessCodeInput, false);
-            setLoginMessage("Código de acesso inválido. Verifique e tente novamente.");
-            elements.accessCodeInput.select();
-            return;
-        }
-
-        createSession(email);
-        showApplication(email);
+        await window.SharePointContracts.signIn();
     } catch (error) {
-        console.error("Erro ao validar acesso:", error);
-        setLoginMessage("Não foi possível validar o acesso neste navegador.");
-    } finally {
+        console.error("Erro ao iniciar login Microsoft:", error);
+        setLoginMessage(error.message || "Não foi possível abrir o login da Microsoft.");
         setLoginLoading(false);
     }
 }
 
-function handleLogout() {
-    clearSession();
-    elements.accessForm.reset();
-    resetTutorialVideo();
-    clearAllContractFilters({ focus: false, updateUrl: false });
-    showLogin();
-    elements.emailInput.focus();
-}
+async function handleLogout() {
+    stopAutomaticRefresh();
 
-function togglePasswordVisibility() {
-    const isVisible = elements.accessCodeInput.type === "text";
-    elements.accessCodeInput.type = isVisible ? "password" : "text";
-    elements.togglePasswordButton.textContent = isVisible ? "Mostrar" : "Ocultar";
-    elements.togglePasswordButton.setAttribute(
-        "aria-label",
-        isVisible ? "Mostrar código de acesso" : "Ocultar código de acesso"
-    );
-    elements.togglePasswordButton.setAttribute("aria-pressed", String(!isVisible));
-    elements.accessCodeInput.focus();
+    try {
+        await window.SharePointContracts.signOut();
+    } catch (error) {
+        console.error("Erro ao sair da conta Microsoft:", error);
+        setLoginMessage("Não foi possível encerrar a sessão Microsoft.");
+        showLogin();
+    }
 }
 
 function showLogin() {
@@ -349,24 +274,153 @@ function showLogin() {
     window.scrollTo({ top: 0, behavior: "instant" });
 }
 
-function showApplication(email) {
+function setRefreshLoading(isLoading) {
+    state.dataLoadInProgress = isLoading;
+    elements.refreshContractsButton.disabled = isLoading;
+    elements.refreshContractsButton.textContent = isLoading ? "Atualizando..." : "Atualizar agora";
+}
+
+function preserveFilterValues() {
+    return {
+        responsible: elements.responsibleFilter.value,
+        status: elements.statusFilter.value,
+        establishment: elements.establishmentFilter.value,
+        category: elements.categoryFilter.value,
+        sort: elements.sortFilter.value,
+        search: elements.contractSearchInput.value
+    };
+}
+
+function restorePreservedFilterValues(values) {
+    const setIfAvailable = (element, value) => {
+        if (!value) return;
+        if ([...element.options].some((option) => option.value === value)) {
+            element.value = value;
+        }
+    };
+
+    elements.contractSearchInput.value = values.search || "";
+    setIfAvailable(elements.responsibleFilter, values.responsible);
+    setIfAvailable(elements.statusFilter, values.status);
+    setIfAvailable(elements.establishmentFilter, values.establishment);
+    setIfAvailable(elements.categoryFilter, values.category);
+    setIfAvailable(elements.sortFilter, values.sort);
+    updateSearchClearButton();
+}
+
+async function refreshContracts({ force = false, initial = false } = {}) {
+    if (state.dataLoadInProgress) return false;
+
+    const previousFilters = preserveFilterValues();
+    const filtersWereAlreadyRestored = state.filtersRestored;
+    setRefreshLoading(true);
+
+    if (initial && !getContracts().length) {
+        showContractLoading();
+    }
+
+    try {
+        const result = await window.SharePointContracts.loadContracts({ force });
+
+        if (result?.redirected) return false;
+
+        if (result?.changed || !state.contractsInitialized) {
+            state.contractsInitialized = false;
+            state.contractIdMap = new WeakMap();
+            state.supplierResponsibleIndex = new Map();
+
+            const initialized = initializeContracts();
+            if (!initialized) return false;
+
+            if (filtersWereAlreadyRestored) {
+                restorePreservedFilterValues(previousFilters);
+                applyContractFilters({ resetPage: false });
+            }
+        } else {
+            updateContractDataSourceNote();
+        }
+
+        return true;
+    } catch (error) {
+        console.error("Erro ao carregar a planilha do SharePoint:", error);
+
+        const friendlyMessage = getFriendlySharePointError(error);
+        if (getContracts().length && state.contractsInitialized) {
+            elements.contractDataSource.textContent = `Falha na última verificação: ${friendlyMessage}`;
+        } else {
+            showContractLoadError(friendlyMessage);
+        }
+
+        return false;
+    } finally {
+        setRefreshLoading(false);
+    }
+}
+
+function getFriendlySharePointError(error) {
+    if (error?.status === 401) {
+        return "Sua sessão expirou. Saia e entre novamente.";
+    }
+
+    if (error?.status === 403) {
+        return "Sua conta não tem permissão para acessar esta planilha ou o administrador ainda não aprovou a permissão do aplicativo.";
+    }
+
+    if (error?.status === 404) {
+        return "A planilha não foi encontrada no caminho configurado. Confira o nome do arquivo e as pastas no config.js.";
+    }
+
+    return error?.message || "Não foi possível consultar a planilha no SharePoint.";
+}
+
+function startAutomaticRefresh() {
+    stopAutomaticRefresh();
+
+    const interval = Number(APP_CONFIG.sharePoint.refreshIntervalMs);
+    if (!Number.isFinite(interval) || interval < 60000) return;
+
+    state.dataRefreshTimer = window.setInterval(() => {
+        if (document.visibilityState === "visible") {
+            refreshContracts();
+        }
+    }, interval);
+}
+
+function stopAutomaticRefresh() {
+    if (!state.dataRefreshTimer) return;
+    window.clearInterval(state.dataRefreshTimer);
+    state.dataRefreshTimer = null;
+}
+
+function refreshWhenVisible() {
+    if (document.visibilityState === "visible" && window.SharePointContracts.getAccount()) {
+        refreshContracts();
+    }
+}
+
+async function showApplication(account) {
+    const email = account?.username || "Usuário Microsoft";
+    const displayName = account?.name || email;
+
     elements.loginSection.classList.add("hidden");
     elements.appSection.classList.remove("hidden");
     elements.appFooter.classList.remove("hidden");
     elements.userArea.classList.remove("hidden");
     elements.appNavigation.classList.remove("hidden");
-    elements.userName.textContent = email;
+    elements.userName.textContent = displayName;
     const avatar = elements.userArea.querySelector?.(".user-avatar");
-    if (avatar) avatar.textContent = email.charAt(0).toLocaleUpperCase("pt-BR") || "U";
+    if (avatar) avatar.textContent = displayName.charAt(0).toLocaleUpperCase("pt-BR") || "U";
 
     loadTutorialMetadata();
-    initializeContracts();
 
     const requestedView = getUrlParameter("view") === "tutorial" ? "tutorial" : "contracts";
     setActiveView(requestedView, { focus: false, updateUrl: false });
 
     document.title = "Consulta de Contratos | Brasilata";
     window.scrollTo({ top: 0, behavior: "instant" });
+
+    await refreshContracts({ force: true, initial: true });
+    startAutomaticRefresh();
 
     requestAnimationFrame(() => {
         const title = requestedView === "tutorial" ? elements.tutorialTitle : elements.portalTitle;
@@ -552,28 +606,19 @@ function formatCurrency(value) {
     }).format(number);
 }
 
-function formatNumber(value, maximumFractionDigits = 3) {
+function formatQuantity(value) {
     if (value === null || value === undefined || value === "") {
-        return "Não informado";
+        return "—";
     }
 
     const number = Number(value);
-
     if (!Number.isFinite(number)) {
         return String(value);
     }
 
     return new Intl.NumberFormat("pt-BR", {
-        maximumFractionDigits
+        maximumFractionDigits: 4
     }).format(number);
-}
-
-function formatPercentageList(values) {
-    if (!Array.isArray(values) || !values.length) {
-        return "Não informado";
-    }
-
-    return values.map((value) => `${formatNumber(value, 2)}%`).join(", ");
 }
 
 function formatStatusDetail(status) {
@@ -595,12 +640,9 @@ function formatStatusDetail(status) {
 
 function buildContractIndexes() {
     const supplierIndex = new Map();
-    state.contractSearchIndex = new WeakMap();
 
     getContracts().forEach((contract, index) => {
         state.contractIdMap.set(contract, String(index));
-        state.contractSearchIndex.set(contract, buildContractSearchContent(contract));
-
         const supplierKey = normalizeText(contract.fornecedor);
 
         if (!supplierKey || !contract.responsavel) {
@@ -656,7 +698,7 @@ function populateContractFilters() {
         "Todos os estabelecimentos",
         (establishment) => `${establishment} · ${establishmentCompanies.get(establishment)}`
     );
-    createSelectOptions(elements.categoryFilter, categories, "Todos os tipos");
+    createSelectOptions(elements.categoryFilter, categories, "Todas as categorias");
 }
 
 function restoreFiltersFromUrl() {
@@ -683,30 +725,27 @@ function restoreFiltersFromUrl() {
     updateSearchClearButton();
 }
 
-function buildContractSearchContent(contract) {
+function getContractSearchContent(contract) {
     const itemContent = Array.isArray(contract.itens)
         ? contract.itens.flatMap((item) => [
             item.descricao,
-            item.tipo,
-            item.tipoConsumo
+            item.tipoConsumoMedicao,
+            item.tipoMedicao
         ])
         : [];
 
     return [
         contract.numero,
-        contract.descricao,
         contract.fornecedor,
-        contract.cnpjFornecedor,
         contract.responsavel,
-        contract.gestor,
+        contract.suplente,
         contract.empresa,
         contract.estabelecimento,
-        contract.razaoSocialContratante,
-        contract.cnpjContratante,
+        contract.descricao,
+        contract.conta,
         contract.categoria,
-        ...(contract.tipos || []),
-        ...(contract.tiposConsumo || []),
-        contract.situacao,
+        contract.centroCusto,
+        contract.descricaoCentroCusto,
         contract.dataInicio,
         contract.dataFim,
         ...itemContent
@@ -714,10 +753,6 @@ function buildContractSearchContent(contract) {
         .filter((value) => value !== null && value !== undefined && value !== "")
         .map(normalizeText)
         .join(" ");
-}
-
-function getContractSearchContent(contract) {
-    return state.contractSearchIndex.get(contract) || buildContractSearchContent(contract);
 }
 
 function contractMatchesSearch(contract, normalizedSearch) {
@@ -834,55 +869,26 @@ function getContractId(contract) {
     return state.contractIdMap.get(contract) || "";
 }
 
-function getMatchingItemDescription(contract, rawQuery) {
-    const terms = normalizeText(rawQuery).split(/\s+/).filter(Boolean);
-
-    if (!terms.length || !Array.isArray(contract.itens)) {
-        return "";
-    }
-
-    const matchingItem = contract.itens.find((item) => {
-        const itemContent = normalizeText([
-            item.descricao,
-            item.tipo,
-            item.tipoConsumo
-        ].filter(Boolean).join(" "));
-
-        return terms.every((term) => itemContent.includes(term));
-    });
-
-    return matchingItem?.descricao || "";
-}
-
 function createContractTableRow(contract) {
     const status = getContractStatus(contract);
     const query = elements.contractSearchInput.value;
     const contractId = getContractId(contract);
-    const matchingItem = getMatchingItemDescription(contract, query);
-    const managerLine = contract.gestor && normalizeText(contract.gestor) !== normalizeText(contract.responsavel)
-        ? `<span class="table-secondary">Gestor: ${highlightText(contract.gestor, query)}</span>`
-        : "";
 
     return `
         <tr>
-            <td class="contract-code-cell">
+            <td>
                 <span class="table-primary">${highlightText(contract.numero || "Não informado", query)}</span>
-                <span class="table-secondary">${escapeHtml(contract.categoria || "Tipo não informado")}</span>
-            </td>
-            <td class="contract-description-cell">
-                <span class="table-primary">${highlightText(contract.descricao || "Descrição não informada", query)}</span>
-                <span class="table-secondary">${highlightText(contract.fornecedor || "Fornecedor não informado", query)}</span>
-                ${matchingItem ? `<span class="table-match">Item relacionado: ${highlightText(matchingItem, query)}</span>` : ""}
+                <span class="table-secondary">${escapeHtml(contract.categoria || "Categoria não informada")}</span>
             </td>
             <td>
-                <span class="table-primary">${contract.responsavel ? highlightText(contract.responsavel, query) : createMissingValue("Responsável não informado")}</span>
-                ${managerLine}
+                <span class="table-primary">${highlightText(contract.fornecedor || "Fornecedor não informado", query)}</span>
+                <span class="table-secondary">${highlightText(contract.descricao || "Descrição não informada", query)}</span>
             </td>
+            <td><span class="table-primary">${contract.responsavel ? highlightText(contract.responsavel, query) : createMissingValue("Responsável não informado")}</span></td>
             <td>
                 <span class="table-primary">${escapeHtml(contract.empresa || "Empresa não informada")}</span>
                 <span class="table-secondary">Estabelecimento ${escapeHtml(contract.estabelecimento || "não informado")}</span>
             </td>
-            <td><span class="item-count-badge">${escapeHtml(String(contract.quantidadeItens || 0))}</span></td>
             <td>
                 <span class="table-primary">${escapeHtml(formatDate(contract.dataFim))}</span>
                 <span class="table-secondary">${escapeHtml(formatStatusDetail(status))}</span>
@@ -897,20 +903,16 @@ function createContractCard(contract) {
     const status = getContractStatus(contract);
     const query = elements.contractSearchInput.value;
     const contractId = getContractId(contract);
-    const matchingItem = getMatchingItemDescription(contract, query);
 
     return `
         <article class="contract-card status-${status.key}">
             <header class="contract-card-header">
                 <div>
                     <span class="contract-number">Contrato ${highlightText(contract.numero || "Não informado", query)}</span>
-                    <h3>${highlightText(contract.descricao || "Descrição não informada", query)}</h3>
-                    <p class="contract-supplier">${highlightText(contract.fornecedor || "Fornecedor não informado", query)}</p>
+                    <h3>${highlightText(contract.fornecedor || "Fornecedor não informado", query)}</h3>
                 </div>
                 ${getStatusBadgeMarkup(status)}
             </header>
-
-            ${matchingItem ? `<p class="card-match"><strong>Item relacionado:</strong> ${highlightText(matchingItem, query)}</p>` : ""}
 
             <div class="contract-compact-grid">
                 <div class="compact-item">
@@ -922,16 +924,16 @@ function createContractCard(contract) {
                     <strong>${escapeHtml(contract.empresa || "Não informada")} · ${escapeHtml(contract.estabelecimento || "—")}</strong>
                 </div>
                 <div class="compact-item">
-                    <span>Itens</span>
-                    <strong>${escapeHtml(String(contract.quantidadeItens || 0))} ${contract.quantidadeItens === 1 ? "item" : "itens"}</strong>
-                </div>
-                <div class="compact-item">
                     <span>Data de término</span>
                     <strong>${escapeHtml(formatDate(contract.dataFim))}</strong>
                 </div>
+                <div class="compact-item">
+                    <span>Situação</span>
+                    <strong>${escapeHtml(formatStatusDetail(status))}</strong>
+                </div>
             </div>
 
-            <button class="button button-secondary button-small table-action" type="button" data-contract-id="${escapeHtml(contractId)}">Ver detalhes e itens</button>
+            <button class="button button-secondary button-small table-action" type="button" data-contract-id="${escapeHtml(contractId)}">Ver detalhes</button>
         </article>
     `;
 }
@@ -1049,7 +1051,7 @@ function createEmptyStateText() {
     if (elements.responsibleFilter.value) parts.push(`o responsável “${elements.responsibleFilter.value}”`);
     if (elements.statusFilter.value) parts.push(`o status “${getSelectedOptionText(elements.statusFilter)}”`);
     if (elements.establishmentFilter.value) parts.push(`o estabelecimento “${elements.establishmentFilter.value}”`);
-    if (elements.categoryFilter.value) parts.push(`o tipo de contrato “${elements.categoryFilter.value}”`);
+    if (elements.categoryFilter.value) parts.push(`a categoria “${elements.categoryFilter.value}”`);
 
     if (!parts.length) {
         return "Não há contratos disponíveis na base atual.";
@@ -1070,7 +1072,7 @@ function getActiveFilters() {
     if (elements.responsibleFilter.value) filters.push({ key: "responsible", label: `Responsável: ${elements.responsibleFilter.value}` });
     if (elements.statusFilter.value) filters.push({ key: "status", label: `Status: ${getSelectedOptionText(elements.statusFilter)}` });
     if (elements.establishmentFilter.value) filters.push({ key: "establishment", label: `Estabelecimento: ${elements.establishmentFilter.value}` });
-    if (elements.categoryFilter.value) filters.push({ key: "category", label: `Tipo: ${elements.categoryFilter.value}` });
+    if (elements.categoryFilter.value) filters.push({ key: "category", label: `Categoria: ${elements.categoryFilter.value}` });
 
     return filters;
 }
@@ -1131,24 +1133,57 @@ function updateContractDataSourceNote() {
         return;
     }
 
-    const generatedDate = metadata.generatedAt ? new Date(metadata.generatedAt) : null;
-    const totals = `${metadata.records || getContracts().length} contratos · ${metadata.items || 0} itens`;
+    const modifiedDate = metadata.lastModifiedDateTime
+        ? new Date(metadata.lastModifiedDateTime)
+        : metadata.generatedAt
+            ? new Date(metadata.generatedAt)
+            : null;
+    const checkedDate = metadata.lastCheckedAt ? new Date(metadata.lastCheckedAt) : null;
+    const parts = [];
 
-    if (generatedDate && !Number.isNaN(generatedDate.getTime())) {
+    if (modifiedDate && !Number.isNaN(modifiedDate.getTime())) {
         const formatted = new Intl.DateTimeFormat("pt-BR", {
             dateStyle: "short",
             timeStyle: "short",
             timeZone: "America/Sao_Paulo"
-        }).format(generatedDate);
-        elements.contractDataSource.textContent = `${totals} · atualizado em ${formatted}`;
-        return;
+        }).format(modifiedDate);
+        parts.push(`Planilha alterada em ${formatted}`);
     }
 
-    elements.contractDataSource.textContent = totals;
+    parts.push(`${metadata.records || getContracts().length} contratos`);
+
+    if (checkedDate && !Number.isNaN(checkedDate.getTime())) {
+        const checkedTime = new Intl.DateTimeFormat("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "America/Sao_Paulo"
+        }).format(checkedDate);
+        parts.push(`verificado às ${checkedTime}`);
+    }
+
+    elements.contractDataSource.textContent = parts.join(" · ");
+}
+
+function showContractLoading() {
+    state.filteredContracts = [];
+    elements.contractTableContainer.classList.add("hidden");
+    elements.contractCardList.classList.add("hidden");
+    elements.contractEmptyState.classList.add("hidden");
+    elements.pagination.classList.add("hidden");
+    elements.contractResultCount.textContent = "Carregando contratos...";
+    elements.contractDataSource.textContent = "Consultando a planilha no SharePoint";
+    elements.contractCardList.innerHTML = `
+        <div class="contract-state contract-loading-state" role="status">
+            <div class="loading-spinner" aria-hidden="true"></div>
+            <h3>Carregando contratos</h3>
+            <p>Aguarde enquanto o portal consulta a versão atual da planilha.</p>
+        </div>
+    `;
+    elements.contractCardList.classList.remove("hidden");
 }
 
 function showContractLoadError(message) {
-    const errorMessage = message || "O arquivo contractsData.js não foi carregado. Confirme se ele está na mesma pasta do index.html.";
+    const errorMessage = message || "Não foi possível carregar a planilha configurada no SharePoint.";
     state.filteredContracts = [];
     elements.contractTableContainer.classList.add("hidden");
     elements.contractCardList.classList.add("hidden");
@@ -1196,139 +1231,67 @@ function initializeContracts() {
     }
 }
 
-function getDialogItemPageSize() {
-    return window.matchMedia?.("(max-width: 640px)").matches ? 10 : 20;
-}
+function createContractItemsMarkup(contract) {
+    const items = Array.isArray(contract.itens) ? contract.itens : [];
 
-function getItemSearchContent(item) {
-    return normalizeText([
-        item.descricao,
-        item.tipo,
-        item.tipoConsumo,
-        item.quantidadePrevista,
-        formatNumber(item.quantidadePrevista),
-        item.quantidadeRealizada,
-        formatNumber(item.quantidadeRealizada),
-        item.saldoQuantidade,
-        formatNumber(item.saldoQuantidade),
-        item.valorUnitario,
-        formatCurrency(item.valorUnitario),
-        item.saldoValor,
-        formatCurrency(item.saldoValor)
-    ].filter((value) => value !== null && value !== undefined && value !== "").join(" "));
-}
-
-function getFilteredDialogItems() {
-    const contract = state.activeDialogContract;
-    const items = Array.isArray(contract?.itens) ? contract.itens : [];
-    const terms = normalizeText(state.dialogItemQuery).split(/\s+/).filter(Boolean);
-
-    if (!terms.length) {
-        return items;
+    if (!items.length) {
+        return `
+            <section class="contract-items-section">
+                <div class="contract-items-heading">
+                    <div>
+                        <span class="section-kicker">Itens do contrato</span>
+                        <h3>Nenhum item disponível</h3>
+                    </div>
+                </div>
+                <p class="contract-items-empty">A planilha não possui itens associados a este contrato.</p>
+            </section>
+        `;
     }
 
-    return items.filter((item) => {
-        const content = getItemSearchContent(item);
-        return terms.every((term) => content.includes(term));
-    });
-}
-
-function createDialogItemTableRow(item) {
-    const query = state.dialogItemQuery;
-
     return `
-        <tr>
-            <td>
-                <span class="table-primary">${highlightText(item.descricao || "Item sem descrição", query)}</span>
-                <span class="table-secondary">${escapeHtml([item.tipo, item.tipoConsumo].filter(Boolean).join(" · ") || "Classificação não informada")}</span>
-            </td>
-            <td>${escapeHtml(formatNumber(item.quantidadePrevista))}</td>
-            <td>${escapeHtml(formatNumber(item.quantidadeRealizada))}</td>
-            <td>${escapeHtml(formatNumber(item.saldoQuantidade))}</td>
-            <td>${escapeHtml(formatCurrency(item.valorUnitario))}</td>
-            <td>${escapeHtml(formatCurrency(item.saldoValor))}</td>
-        </tr>
+        <section class="contract-items-section">
+            <div class="contract-items-heading">
+                <div>
+                    <span class="section-kicker">Itens do contrato</span>
+                    <h3>${items.length} ${items.length === 1 ? "item" : "itens"}</h3>
+                </div>
+                <span class="contract-items-count">${items.length}</span>
+            </div>
+
+            <div class="contract-items-table-wrapper">
+                <table class="contract-items-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Item</th>
+                            <th scope="col">Prevista</th>
+                            <th scope="col">Realizada</th>
+                            <th scope="col">Saldo qtd.</th>
+                            <th scope="col">Valor unitário</th>
+                            <th scope="col">Saldo valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${items.map((item, index) => `
+                            <tr>
+                                <td>
+                                    <span class="item-index">${index + 1}</span>
+                                    <strong>${createDisplayedValue(item.descricao, "Item sem descrição")}</strong>
+                                    ${(item.tipoMedicao || item.tipoConsumoMedicao) ? `
+                                        <small>${escapeHtml([item.tipoMedicao, item.tipoConsumoMedicao].filter(Boolean).join(" · "))}</small>
+                                    ` : ""}
+                                </td>
+                                <td data-label="Prevista">${escapeHtml(formatQuantity(item.quantidadePrevista))}</td>
+                                <td data-label="Realizada">${escapeHtml(formatQuantity(item.quantidadeRealizada))}</td>
+                                <td data-label="Saldo qtd.">${escapeHtml(formatQuantity(item.saldoQuantidade))}</td>
+                                <td data-label="Valor unitário">${escapeHtml(formatCurrency(item.valorUnitario))}</td>
+                                <td data-label="Saldo valor">${escapeHtml(formatCurrency(item.saldoValor))}</td>
+                            </tr>
+                        `).join("")}
+                    </tbody>
+                </table>
+            </div>
+        </section>
     `;
-}
-
-function createDialogItemCard(item) {
-    return `
-        <article class="dialog-item-card">
-            <h4>${highlightText(item.descricao || "Item sem descrição", state.dialogItemQuery)}</h4>
-            <p>${escapeHtml([item.tipo, item.tipoConsumo].filter(Boolean).join(" · ") || "Classificação não informada")}</p>
-            <dl>
-                <div><dt>Prevista</dt><dd>${escapeHtml(formatNumber(item.quantidadePrevista))}</dd></div>
-                <div><dt>Realizada</dt><dd>${escapeHtml(formatNumber(item.quantidadeRealizada))}</dd></div>
-                <div><dt>Saldo qtd.</dt><dd>${escapeHtml(formatNumber(item.saldoQuantidade))}</dd></div>
-                <div><dt>Valor unit.</dt><dd>${escapeHtml(formatCurrency(item.valorUnitario))}</dd></div>
-                <div><dt>Saldo valor</dt><dd>${escapeHtml(formatCurrency(item.saldoValor))}</dd></div>
-            </dl>
-        </article>
-    `;
-}
-
-function renderContractDialogItems() {
-    const filteredItems = getFilteredDialogItems();
-    const visibleItems = filteredItems.slice(0, state.dialogItemsVisible);
-    const tableBody = elements.contractDialogContent.querySelector("#dialogItemsTableBody");
-    const cardList = elements.contractDialogContent.querySelector("#dialogItemsCardList");
-    const emptyState = elements.contractDialogContent.querySelector("#dialogItemsEmpty");
-    const resultCount = elements.contractDialogContent.querySelector("#dialogItemResultCount");
-    const showMoreButton = elements.contractDialogContent.querySelector("#dialogItemsShowMore");
-
-    if (!tableBody || !cardList || !emptyState || !resultCount || !showMoreButton) {
-        return;
-    }
-
-    tableBody.innerHTML = visibleItems.map(createDialogItemTableRow).join("");
-    cardList.innerHTML = visibleItems.map(createDialogItemCard).join("");
-    emptyState.classList.toggle("hidden", filteredItems.length > 0);
-
-    const total = filteredItems.length;
-    const shown = Math.min(visibleItems.length, total);
-    resultCount.textContent = total
-        ? `${total} ${total === 1 ? "item encontrado" : "itens encontrados"} — exibindo ${shown}`
-        : "Nenhum item encontrado";
-
-    const remaining = Math.max(0, total - shown);
-    showMoreButton.classList.toggle("hidden", remaining === 0);
-    showMoreButton.textContent = remaining
-        ? `Mostrar mais itens (${Math.min(getDialogItemPageSize(), remaining)} de ${remaining})`
-        : "";
-}
-
-function bindContractDialogItemEvents() {
-    const searchInput = elements.contractDialogContent.querySelector("#dialogItemSearch");
-    const clearButton = elements.contractDialogContent.querySelector("#dialogItemSearchClear");
-    const showMoreButton = elements.contractDialogContent.querySelector("#dialogItemsShowMore");
-
-    searchInput?.addEventListener("input", () => {
-        state.dialogItemQuery = searchInput.value;
-        state.dialogItemsVisible = getDialogItemPageSize();
-        clearButton?.classList.toggle("hidden", !searchInput.value);
-        renderContractDialogItems();
-    });
-
-    clearButton?.addEventListener("click", () => {
-        searchInput.value = "";
-        state.dialogItemQuery = "";
-        state.dialogItemsVisible = getDialogItemPageSize();
-        clearButton.classList.add("hidden");
-        renderContractDialogItems();
-        searchInput.focus();
-    });
-
-    showMoreButton?.addEventListener("click", () => {
-        state.dialogItemsVisible += getDialogItemPageSize();
-        renderContractDialogItems();
-    });
-}
-
-function sumItemField(items, field) {
-    return items.reduce((total, item) => {
-        const value = Number(item[field]);
-        return Number.isFinite(value) ? total + value : total;
-    }, 0);
 }
 
 function openContractDialog(contractId, trigger) {
@@ -1341,53 +1304,36 @@ function openContractDialog(contractId, trigger) {
     const otherResponsibles = supplierResponsibles.filter(
         (responsible) => normalizeText(responsible) !== currentResponsible
     );
-    const items = Array.isArray(contract.itens) ? contract.itens : [];
-    const plannedQuantity = sumItemField(items, "quantidadePrevista");
-    const realizedQuantity = sumItemField(items, "quantidadeRealizada");
-
-    state.activeDialogContract = contract;
-    state.dialogItemQuery = "";
-    state.dialogItemsVisible = getDialogItemPageSize();
 
     elements.dialogTitle.textContent = `Contrato ${contract.numero || "não informado"}`;
     elements.contractDialogContent.innerHTML = `
         <div class="dialog-supplier">
             <div>
-                <p class="dialog-contract-label">Descrição do contrato</p>
-                <h3>${createDisplayedValue(contract.descricao, "Descrição não informada")}</h3>
-                <p class="dialog-description">${createDisplayedValue(contract.fornecedor, "Fornecedor não informado")}</p>
+                <h3>${escapeHtml(contract.fornecedor || "Fornecedor não informado")}</h3>
+                <p class="dialog-description">${createDisplayedValue(contract.descricao, "Descrição não informada")}</p>
             </div>
-            <div class="dialog-status">
+            <div>
                 ${getStatusBadgeMarkup(status)}
                 <p class="dialog-description">${escapeHtml(formatStatusDetail(status))}</p>
             </div>
         </div>
 
-        <div class="contract-detail-kpis" aria-label="Resumo do contrato">
-            <div><span>Itens</span><strong>${escapeHtml(String(items.length))}</strong></div>
-            <div><span>Quantidade prevista</span><strong>${escapeHtml(formatNumber(plannedQuantity))}</strong></div>
-            <div><span>Quantidade realizada</span><strong>${escapeHtml(formatNumber(realizedQuantity))}</strong></div>
-            <div><span>Saldo do contrato</span><strong>${escapeHtml(formatCurrency(contract.saldo))}</strong></div>
-        </div>
-
         <dl class="detail-grid">
-            <div><dt>Responsável</dt><dd>${createDisplayedValue(contract.responsavel, "Responsável não informado")}</dd></div>
-            <div><dt>Gestor</dt><dd>${createDisplayedValue(contract.gestor, "Gestor não informado")}</dd></div>
-            <div><dt>Fornecedor</dt><dd>${createDisplayedValue(contract.fornecedor, "Fornecedor não informado")}</dd></div>
-            <div><dt>CNPJ/Tax ID do fornecedor</dt><dd>${createDisplayedValue(contract.cnpjFornecedor, "Não informado")}</dd></div>
-            <div><dt>Empresa contratante</dt><dd>${createDisplayedValue(contract.empresa, "Empresa não informada")}</dd></div>
-            <div><dt>Estabelecimento</dt><dd>${createDisplayedValue(contract.estabelecimento, "Não informado")}</dd></div>
-            <div><dt>CNPJ/Tax ID da contratante</dt><dd>${createDisplayedValue(contract.cnpjContratante, "Não informado")}</dd></div>
-            <div><dt>Tipo de contrato</dt><dd>${createDisplayedValue(contract.categoria, "Tipo não informado")}</dd></div>
-            <div><dt>Tipo</dt><dd>${createDisplayedValue((contract.tipos || []).join(", "), "Não informado")}</dd></div>
-            <div><dt>Consumo da medição</dt><dd>${createDisplayedValue((contract.tiposConsumo || []).join(", "), "Não informado")}</dd></div>
+            <div><dt>Responsável pelo fornecedor</dt><dd>${createDisplayedValue(contract.responsavel, "Responsável não informado")}</dd></div>
+            <div><dt>Suplente</dt><dd>${createDisplayedValue(contract.suplente, "Suplente não informado")}</dd></div>
+            <div><dt>Empresa</dt><dd>${createDisplayedValue(contract.empresa, "Empresa não informada")}</dd></div>
+            <div><dt>Código do estabelecimento</dt><dd>${createDisplayedValue(contract.estabelecimento, "Não informado")}</dd></div>
+            <div><dt>Categoria</dt><dd>${createDisplayedValue(contract.categoria, "Categoria não informada")}</dd></div>
             <div><dt>Data de início</dt><dd>${escapeHtml(formatDate(contract.dataInicio))}</dd></div>
             <div><dt>Data de término</dt><dd>${escapeHtml(formatDate(contract.dataFim))}</dd></div>
-            <div><dt>Situação na origem</dt><dd>${createDisplayedValue(contract.situacao, "Não informada")}</dd></div>
-            <div><dt>Valor total</dt><dd>${escapeHtml(formatCurrency(contract.valorTotal))}</dd></div>
-            <div><dt>Saldo mínimo</dt><dd>${escapeHtml(formatPercentageList(contract.saldoMinimoPercentuais))}</dd></div>
-            <div><dt>Prazo</dt><dd>${escapeHtml(formatStatusDetail(status))}</dd></div>
+            <div><dt>Conta contábil</dt><dd>${createDisplayedValue(contract.conta, "Conta não informada")}</dd></div>
+            <div><dt>Centro de custo</dt><dd>${createDisplayedValue(contract.centroCusto, "Código não informado")}</dd></div>
+            <div><dt>Descrição do centro de custo</dt><dd>${createDisplayedValue(contract.descricaoCentroCusto, "Descrição não informada")}</dd></div>
+            <div><dt>Valor planejado</dt><dd>${escapeHtml(formatCurrency(contract.valorPlanejado))}</dd></div>
+            <div><dt>Valor real</dt><dd>${escapeHtml(formatCurrency(contract.valorReal))}</dd></div>
         </dl>
+
+        ${createContractItemsMarkup(contract)}
 
         ${otherResponsibles.length ? `
             <div class="other-responsibles">
@@ -1395,54 +1341,9 @@ function openContractDialog(contractId, trigger) {
                 <ul>${otherResponsibles.map((responsible) => `<li>${escapeHtml(responsible)}</li>`).join("")}</ul>
             </div>
         ` : ""}
-
-        <section class="contract-items-section" aria-labelledby="dialogItemsTitle">
-            <div class="contract-items-heading">
-                <div>
-                    <p class="dialog-contract-label">Itens agrupados</p>
-                    <h3 id="dialogItemsTitle">Itens do contrato (${escapeHtml(String(items.length))})</h3>
-                    <p>Os itens da planilha ficam dentro deste contrato, sem duplicar o resultado principal.</p>
-                </div>
-            </div>
-
-            <div class="dialog-item-toolbar">
-                <label for="dialogItemSearch">Pesquisar dentro dos itens</label>
-                <div class="search-field">
-                    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <path d="m21 21-4.35-4.35"></path>
-                    </svg>
-                    <input id="dialogItemSearch" type="search" placeholder="Nome do item, tipo ou valor" autocomplete="off">
-                    <button id="dialogItemSearchClear" class="clear-search hidden" type="button" aria-label="Limpar pesquisa de itens">×</button>
-                </div>
-                <span id="dialogItemResultCount" class="dialog-item-result" aria-live="polite"></span>
-            </div>
-
-            <div class="dialog-items-table-shell">
-                <table class="dialog-items-table">
-                    <thead>
-                        <tr>
-                            <th scope="col">Item</th>
-                            <th scope="col">Prevista</th>
-                            <th scope="col">Realizada</th>
-                            <th scope="col">Saldo qtd.</th>
-                            <th scope="col">Valor unit.</th>
-                            <th scope="col">Saldo valor</th>
-                        </tr>
-                    </thead>
-                    <tbody id="dialogItemsTableBody"></tbody>
-                </table>
-            </div>
-
-            <div id="dialogItemsCardList" class="dialog-items-card-list"></div>
-            <div id="dialogItemsEmpty" class="dialog-items-empty hidden">Nenhum item corresponde à pesquisa.</div>
-            <button id="dialogItemsShowMore" class="button button-secondary dialog-items-more hidden" type="button"></button>
-        </section>
     `;
 
     state.lastDialogTrigger = trigger || null;
-    bindContractDialogItemEvents();
-    renderContractDialogItems();
 
     if (typeof elements.contractDialog.showModal === "function") {
         elements.contractDialog.showModal();
@@ -1494,7 +1395,7 @@ function handleResize() {
 function bindEvents() {
     elements.accessForm.addEventListener("submit", handleLogin);
     elements.logoutButton.addEventListener("click", handleLogout);
-    elements.togglePasswordButton.addEventListener("click", togglePasswordVisibility);
+    elements.refreshContractsButton.addEventListener("click", () => refreshContracts({ force: true }));
     elements.contractFilters.addEventListener("submit", (event) => event.preventDefault());
     elements.contractSearchInput.addEventListener("input", handleContractSearch);
     elements.clearContractSearch.addEventListener("click", clearContractSearch);
@@ -1552,29 +1453,25 @@ function bindEvents() {
         state.lastDialogTrigger?.focus();
     });
 
-    elements.emailInput.addEventListener("input", () => {
-        setInputValidity(elements.emailInput, true);
-        setLoginMessage();
-    });
-
-    elements.accessCodeInput.addEventListener("input", () => {
-        setInputValidity(elements.accessCodeInput, true);
-        setLoginMessage();
-    });
-
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
     window.addEventListener("resize", handleResize);
 }
 
-function initializeApplication() {
+async function initializeApplication() {
     bindEvents();
-    initializeContracts();
-
-    if (hasActiveSession()) {
-        showApplication(getSessionEmail());
-        return;
-    }
-
     showLogin();
+
+    try {
+        const account = await window.SharePointContracts.initialize();
+
+        if (account) {
+            await showApplication(account);
+        }
+    } catch (error) {
+        console.error("Erro ao inicializar integração Microsoft:", error);
+        setLoginMessage(error.message || "Não foi possível inicializar o login Microsoft.");
+    }
 }
 
 document.addEventListener("DOMContentLoaded", initializeApplication);

@@ -3,14 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Portal interno para consulta de contratos, descrições, responsáveis e itens da Brasilata.">
-    <title>Consulta de Contratos | Brasilata</title>
+    <meta name="description" content="Portal interno para consulta e medição de contratos da Brasilata.">
+    <title>Contratos | Brasilata</title>
 
-    <link rel="stylesheet" href="style.css?v=20260728-all-contracts">
-    <script src="config.js?v=20260728-all-contracts" defer></script>
-    <script src="tutorials.js?v=20260728-all-contracts" defer></script>
-    <script src="contractsData.js?v=20260728-all-contracts" defer></script>
-    <script src="script.js?v=20260728-all-contracts" defer></script>
+    <link rel="stylesheet" href="style.css?v=20260804-sharepoint-fix">
+    <script src="config.js?v=20260804-sharepoint-fix" defer></script>
+    <script
+        src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"
+        integrity="sha384-PARf28kmic36Ve+O3DnUerRXFtOQ7ZDqRDGpLcbljly5/N39T2OV3kt3QsWOKeAX"
+        crossorigin="anonymous"
+        defer></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
+    <script src="contractsMapper.js?v=20260804-sharepoint-fix" defer></script>
+    <script src="sharepointData.js?v=20260804-sharepoint-fix" defer></script>
+    <script src="tutorials.js?v=20260804-sharepoint-fix" defer></script>
+    <script src="script.js?v=20260804-sharepoint-fix" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#mainContent">Pular para o conteúdo principal</a>
@@ -51,9 +58,9 @@
             <div class="container login-container">
                 <div class="login-introduction">
                     <p class="eyebrow">Conteúdo interno</p>
-                    <h1>Consulte todos os contratos e seus itens com rapidez.</h1>
+                    <h1>Consulte contratos e responsáveis com rapidez.</h1>
                     <p class="login-introduction-text">
-                        Encontre contratos, descrições, fornecedores, responsáveis, unidades e itens em uma única tela.
+                        Encontre fornecedores, responsáveis, unidades e datas de término em uma única tela.
                     </p>
 
                     <ul class="login-benefits" aria-label="Recursos disponíveis">
@@ -77,31 +84,20 @@
                         </div>
                     </div>
 
-                    <p class="login-description">Use seu e-mail corporativo e o código de acesso interno.</p>
+                    <p class="login-description">
+                        Entre com sua conta corporativa Microsoft. O portal somente mostrará a planilha se sua conta já tiver permissão no SharePoint.
+                    </p>
 
                     <form id="accessForm" class="access-form" novalidate>
-                        <div class="form-group">
-                            <label for="emailInput">E-mail corporativo</label>
-                            <input id="emailInput" name="email" type="email" placeholder="nome@empresa.com.br" autocomplete="email" inputmode="email" aria-describedby="emailHelp" required>
-                            <span id="emailHelp" class="field-help">Utilize um domínio corporativo autorizado.</span>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="accessCodeInput">Código de acesso</label>
-                            <div class="password-field">
-                                <input id="accessCodeInput" name="accessCode" type="password" placeholder="Digite o código interno" autocomplete="current-password" required>
-                                <button id="togglePasswordButton" class="password-toggle" type="button" aria-label="Mostrar código de acesso" aria-pressed="false">Mostrar</button>
-                            </div>
-                        </div>
-
-                        <button id="loginButton" class="button button-primary button-full" type="submit">
-                            <span>Entrar no portal</span><span aria-hidden="true">→</span>
+                        <button id="loginButton" class="button button-primary button-full microsoft-login-button" type="submit">
+                            <span class="microsoft-symbol" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                            <span>Entrar com a Microsoft</span>
                         </button>
                     </form>
 
                     <p id="loginMessage" class="message" role="status" aria-live="polite"></p>
                     <p class="security-note">
-                        Esta tela organiza o acesso no site. A proteção corporativa real depende do ambiente de publicação.
+                        Os contratos não ficam gravados no GitHub. Eles são carregados do SharePoint depois da autenticação.
                     </p>
                 </div>
             </div>
@@ -114,7 +110,7 @@
                         <div>
                             <p class="eyebrow eyebrow-dark">Consulta de contratos</p>
                             <h1 id="portalTitle" tabindex="-1">Encontre o contrato certo</h1>
-                            <p>Pesquise por contrato, descrição ou item e confira responsáveis, unidades e vencimentos.</p>
+                            <p>Pesquise, filtre e confira rapidamente o responsável e o vencimento de cada contrato.</p>
                         </div>
                         <a class="button button-secondary" href="https://teams.microsoft.com/l/chat/0/0?users=lucas.melo@brasilata.com.br" target="_blank" rel="noopener noreferrer">Tirar uma dúvida</a>
                     </header>
@@ -133,7 +129,7 @@
                                             <circle cx="11" cy="11" r="8"></circle>
                                             <path d="m21 21-4.35-4.35"></path>
                                         </svg>
-                                        <input id="contractSearchInput" type="search" placeholder="Contrato, descrição, fornecedor, responsável ou item" autocomplete="off" spellcheck="false" aria-describedby="contractSearchHelp">
+                                        <input id="contractSearchInput" type="search" placeholder="Contrato, fornecedor, responsável ou descrição" autocomplete="off" spellcheck="false" aria-describedby="contractSearchHelp">
                                         <button id="clearContractSearch" class="clear-search hidden" type="button" aria-label="Limpar texto da pesquisa">×</button>
                                     </div>
                                 </div>
@@ -176,8 +172,8 @@
                                         <select id="establishmentFilter"><option value="">Todos os estabelecimentos</option></select>
                                     </div>
                                     <div class="filter-field">
-                                        <label for="categoryFilter">Tipo de contrato</label>
-                                        <select id="categoryFilter"><option value="">Todos os tipos</option></select>
+                                        <label for="categoryFilter">Categoria</label>
+                                        <select id="categoryFilter"><option value="">Todas as categorias</option></select>
                                     </div>
                                 </div>
 
@@ -210,7 +206,12 @@
                                 <strong id="contractResultCount" class="result-count" aria-live="polite"></strong>
                                 <span id="sortDescription" class="sort-description"></span>
                             </div>
-                            <span id="contractDataSource" class="data-source-note"></span>
+                            <div class="data-source-actions">
+                                <span id="contractDataSource" class="data-source-note"></span>
+                                <button id="refreshContractsButton" class="button button-secondary button-small" type="button">
+                                    Atualizar agora
+                                </button>
+                            </div>
                         </div>
 
                         <div id="contractTableContainer" class="table-shell" aria-label="Tabela de contratos">
@@ -218,10 +219,9 @@
                                 <thead>
                                     <tr>
                                         <th scope="col">Contrato</th>
-                                        <th scope="col">Descrição e fornecedor</th>
+                                        <th scope="col">Fornecedor</th>
                                         <th scope="col">Responsável</th>
                                         <th scope="col">Unidade</th>
-                                        <th scope="col">Itens</th>
                                         <th scope="col">Término</th>
                                         <th scope="col">Status</th>
                                         <th scope="col"><span class="visually-hidden">Ações</span></th>
