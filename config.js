@@ -30,10 +30,10 @@ const APP_CONFIG = Object.freeze({
         hostname: "brasilatacorp.sharepoint.com",
         sitePath: "/sites/Departamentos",
         documentLibraryName: "Documentos",
-        filePath: "Unidade_SP/ESC/05_CONTRATOS/Paradigma_Contratos.xlsx",
-        worksheetName: "Report - Contrato – Relatório d",
 
-        // Atualização periódica. O site também verifica quando a aba volta a ficar ativa.
+        filePath: "Unidade_SP/GSL/01_COMPRAS/Medicao_Contratos/Paradigma_Contratos.xlsx",
+
+        worksheetName: "Report - Contrato – Relatório d",
         refreshIntervalMs: 5 * 60 * 1000
     })
 });
