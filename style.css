@@ -1856,3 +1856,12 @@ mark {
         text-align: left;
     }
 }
+
+/* Acesso direto ao trabalho de acompanhamento, sem alterar os filtros avançados. */
+.expiry-shortcut { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; padding: 1rem; margin-bottom: 1rem; border: 1px solid #d6e5f0; border-radius: 12px; background: #f5faff; }
+.expiry-shortcut > div { display: grid; gap: .15rem; margin-right: auto; }
+.expiry-shortcut > div span { font-size: .9rem; color: #526477; }
+.expiry-shortcut [hidden] { display: none; }
+.expiry-shortcut #expiryFeedback { width: 100%; font-size: .875rem; }
+.expiry-shortcut .is-active { background: #143c60; color: white; }
+@media (max-width: 600px) { .expiry-shortcut { align-items: stretch; } .expiry-shortcut > div, .expiry-shortcut button { width: 100%; } }

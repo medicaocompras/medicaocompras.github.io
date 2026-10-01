@@ -69,7 +69,8 @@ const state = {
     filtersRestored: false,
     lastDialogTrigger: null,
     dataRefreshTimer: null,
-    dataLoadInProgress: false
+    dataLoadInProgress: false,
+    expiryWindowActive: false
 };
 
 const sortLabels = {
@@ -453,6 +454,7 @@ function updateUrlState() {
         q: elements.contractSearchInput.value.trim(),
         responsible: elements.responsibleFilter.value,
         status: elements.statusFilter.value,
+        expiry: state.expiryWindowActive ? "30-40" : "",
         establishment: elements.establishmentFilter.value,
         category: elements.categoryFilter.value,
         sort: elements.sortFilter.value === "urgency" ? "" : elements.sortFilter.value,
@@ -715,6 +717,7 @@ function restoreFiltersFromUrl() {
     elements.contractSearchInput.value = getUrlParameter("q");
     setIfAvailable(elements.responsibleFilter, getUrlParameter("responsible"));
     setIfAvailable(elements.statusFilter, getUrlParameter("status"));
+    state.expiryWindowActive = getUrlParameter("expiry") === "30-40";
     setIfAvailable(elements.establishmentFilter, getUrlParameter("establishment"));
     setIfAvailable(elements.categoryFilter, getUrlParameter("category"));
     setIfAvailable(elements.sortFilter, getUrlParameter("sort"));
@@ -830,6 +833,7 @@ function getFilteredContracts({ ignoreStatus = false } = {}) {
 
         return (
             contractMatchesSearch(contract, normalizedSearch) &&
+            (!state.expiryWindowActive || (status.daysUntil >= 30 && status.daysUntil <= 40)) &&
             (!responsible || normalizeText(contract.responsavel) === responsible) &&
             (ignoreStatus || !selectedStatus || status.key === selectedStatus) &&
             (!establishment || normalizeText(contract.estabelecimento) === establishment) &&
@@ -948,6 +952,7 @@ function getTotalPages() {
 }
 
 function renderContractResults() {
+    updateExpiryShortcut();
     updateContractSummary();
     renderActiveFilters();
     updateMobileFilterCount();
@@ -1026,6 +1031,7 @@ function clearAllContractFilters({ focus = true, updateUrl = true } = {}) {
     elements.contractSearchInput.value = "";
     elements.responsibleFilter.value = "";
     elements.statusFilter.value = "";
+    state.expiryWindowActive = false;
     elements.establishmentFilter.value = "";
     elements.categoryFilter.value = "";
     elements.sortFilter.value = "urgency";
@@ -1050,6 +1056,7 @@ function createEmptyStateText() {
     if (query) parts.push(`a pesquisa “${query}”`);
     if (elements.responsibleFilter.value) parts.push(`o responsável “${elements.responsibleFilter.value}”`);
     if (elements.statusFilter.value) parts.push(`o status “${getSelectedOptionText(elements.statusFilter)}”`);
+    if (state.expiryWindowActive) parts.push("o vencimento entre 30 e 40 dias");
     if (elements.establishmentFilter.value) parts.push(`o estabelecimento “${elements.establishmentFilter.value}”`);
     if (elements.categoryFilter.value) parts.push(`a categoria “${elements.categoryFilter.value}”`);
 
@@ -1071,6 +1078,7 @@ function getActiveFilters() {
     if (query) filters.push({ key: "search", label: `Pesquisa: ${query}` });
     if (elements.responsibleFilter.value) filters.push({ key: "responsible", label: `Responsável: ${elements.responsibleFilter.value}` });
     if (elements.statusFilter.value) filters.push({ key: "status", label: `Status: ${getSelectedOptionText(elements.statusFilter)}` });
+    if (state.expiryWindowActive) filters.push({ key: "expiry", label: "Vence em 30 a 40 dias" });
     if (elements.establishmentFilter.value) filters.push({ key: "establishment", label: `Estabelecimento: ${elements.establishmentFilter.value}` });
     if (elements.categoryFilter.value) filters.push({ key: "category", label: `Categoria: ${elements.categoryFilter.value}` });
 
@@ -1105,6 +1113,11 @@ function removeFilter(key) {
         category: elements.categoryFilter
     };
 
+    if (key === "expiry") {
+        state.expiryWindowActive = false;
+        applyContractFilters();
+        return;
+    }
     const element = elementByKey[key];
     if (!element) return;
 
@@ -1329,8 +1342,8 @@ function openContractDialog(contractId, trigger) {
             <div><dt>Conta contábil</dt><dd>${createDisplayedValue(contract.conta, "Conta não informada")}</dd></div>
             <div><dt>Centro de custo</dt><dd>${createDisplayedValue(contract.centroCusto, "Código não informado")}</dd></div>
             <div><dt>Descrição do centro de custo</dt><dd>${createDisplayedValue(contract.descricaoCentroCusto, "Descrição não informada")}</dd></div>
-            <div><dt>Valor total do contrato</dt><dd>${escapeHtml(formatCurrency(contract.valorPlanejado ?? contract.valorTotal))}</dd></div>
-            <div><dt>Saldo atual do contrato</dt><dd>${escapeHtml(formatCurrency(contract.saldo))}</dd></div>
+            <div><dt>Valor planejado</dt><dd>${escapeHtml(formatCurrency(contract.valorPlanejado))}</dd></div>
+            <div><dt>Valor real</dt><dd>${escapeHtml(formatCurrency(contract.valorReal))}</dd></div>
         </dl>
 
         ${createContractItemsMarkup(contract)}
@@ -1392,7 +1405,44 @@ function handleResize() {
     }, 160);
 }
 
+function installExpiryShortcut() {
+    if (!elements.contractFilters?.insertAdjacentHTML || document.getElementById("expiryShortcut")) return;
+    elements.contractFilters.insertAdjacentHTML("afterbegin", `
+        <div class="expiry-shortcut" aria-label="Consulta rápida de vencimentos">
+            <div><strong>Contratos para avisar</strong><span>Encontre os que vencem em 30 a 40 dias.</span></div>
+            <button id="expiryShortcut" class="button button-secondary" type="button" aria-pressed="false">Ver vencimentos em 30 a 40 dias</button>
+            <button id="copyExpiryList" class="button button-secondary" type="button" hidden>Copiar lista para avisar</button>
+            <span id="expiryFeedback" role="status" aria-live="polite"></span>
+        </div>
+    `);
+}
+
+function updateExpiryShortcut() {
+    const button = document.getElementById("expiryShortcut");
+    const copy = document.getElementById("copyExpiryList");
+    if (!button || !copy) return;
+    button.setAttribute("aria-pressed", String(state.expiryWindowActive));
+    button.classList.toggle("is-active", state.expiryWindowActive);
+    copy.hidden = !state.expiryWindowActive || !state.filteredContracts.length;
+}
+
+async function copyExpiryList() {
+    const feedback = document.getElementById("expiryFeedback");
+    if (!state.expiryWindowActive || !state.filteredContracts.length) return;
+    const lines = state.filteredContracts.map((contract) => {
+        const responsible = contract.responsavel || contract.gestor || "Não informado";
+        return `Contrato ${contract.numero || "Não informado"} | ${contract.fornecedor || "Fornecedor não informado"} | Término: ${formatDate(contract.dataFim)} | Responsável: ${responsible}`;
+    });
+    try {
+        await navigator.clipboard.writeText(`Contratos com vencimento em 30 a 40 dias\n\n${lines.join("\n")}`);
+        if (feedback) feedback.textContent = `${lines.length} contrato(s) copiado(s). Confira os dados antes de avisar o gestor.`;
+    } catch (error) {
+        if (feedback) feedback.textContent = "Não foi possível copiar. Verifique a permissão da área de transferência.";
+    }
+}
+
 function bindEvents() {
+    installExpiryShortcut();
     elements.accessForm.addEventListener("submit", handleLogin);
     elements.logoutButton.addEventListener("click", handleLogout);
     elements.refreshContractsButton.addEventListener("click", () => refreshContracts({ force: true }));
@@ -1418,6 +1468,16 @@ function bindEvents() {
     });
 
     document.addEventListener("click", (event) => {
+        if (event.target.closest?.("#expiryShortcut")) {
+            state.expiryWindowActive = !state.expiryWindowActive;
+            elements.statusFilter.value = "";
+            applyContractFilters();
+            return;
+        }
+        if (event.target.closest?.("#copyExpiryList")) {
+            copyExpiryList();
+            return;
+        }
         const viewTrigger = event.target.closest?.("[data-view]");
         if (viewTrigger) {
             setActiveView(viewTrigger.dataset.view);
