@@ -1329,8 +1329,8 @@ function openContractDialog(contractId, trigger) {
             <div><dt>Conta contábil</dt><dd>${createDisplayedValue(contract.conta, "Conta não informada")}</dd></div>
             <div><dt>Centro de custo</dt><dd>${createDisplayedValue(contract.centroCusto, "Código não informado")}</dd></div>
             <div><dt>Descrição do centro de custo</dt><dd>${createDisplayedValue(contract.descricaoCentroCusto, "Descrição não informada")}</dd></div>
-            <div><dt>Valor planejado</dt><dd>${escapeHtml(formatCurrency(contract.valorPlanejado))}</dd></div>
-            <div><dt>Valor real</dt><dd>${escapeHtml(formatCurrency(contract.valorReal))}</dd></div>
+            <div><dt>Valor total do contrato</dt><dd>${escapeHtml(formatCurrency(contract.valorPlanejado ?? contract.valorTotal))}</dd></div>
+            <div><dt>Saldo atual do contrato</dt><dd>${escapeHtml(formatCurrency(contract.saldo))}</dd></div>
         </dl>
 
         ${createContractItemsMarkup(contract)}
