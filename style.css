@@ -472,6 +472,7 @@ mark {
 .form-group input,
 .search-field input,
 .filter-field select,
+.filter-field input,
 .sort-field select {
     width: 100%;
     min-height: 48px;
@@ -488,6 +489,7 @@ mark {
 .form-group input:focus,
 .search-field:focus-within,
 .filter-field select:focus,
+.filter-field input:focus,
 .sort-field select:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(31, 111, 92, 0.13);
@@ -655,8 +657,13 @@ mark {
 }
 
 .filter-field select,
+.filter-field input,
 .sort-field select {
     padding: 9px 36px 9px 11px;
+}
+
+.filter-field select,
+.sort-field select {
     cursor: pointer;
 }
 

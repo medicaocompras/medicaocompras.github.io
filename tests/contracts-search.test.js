@@ -63,7 +63,7 @@ const elementIds = [
     "loginButton", "loginMessage", "userArea", "userName", "logoutButton",
     "portalTitle", "contractsView", "tutorialView", "tutorialTitle",
     "tutorialDescription", "videoWrapper", "loadVideoButton", "contractFilters",
-    "contractSearchInput", "clearContractSearch", "clearContractFilters",
+    "contractSearchInput", "cnpjFilter", "clearContractSearch", "clearContractFilters",
     "emptyStateClearFilters", "mobileFiltersButton", "mobileFilterCount",
     "advancedFilters", "responsibleFilter", "statusFilter", "establishmentFilter",
     "categoryFilter", "sortFilter", "activeFilters", "contractTableContainer",
@@ -85,13 +85,14 @@ const summaryButtons = ["", "ativo", "proximo", "vencido"].map((status) => {
 });
 
 const contracts = [
-    { estabelecimento: "11", empresa: "BRASILATA", numero: "00024", fornecedor: "BrasRede Telecom", descricao: "Link", categoria: "Telecomunicações", dataFim: "2026-08-20", responsavel: "Estênio Barros", suplente: "Lucas" },
+    { estabelecimento: "11", empresa: "BRASILATA", numero: "00024", fornecedor: "BrasRede Telecom", cnpjFornecedor: "12.345.678/0001-90", cnpjEmpresa: "61.160.438/0006-36", descricao: "Link", categoria: "Telecomunicações", dataFim: "2026-08-20", responsavel: "Estênio Barros", suplente: "Lucas" },
     { estabelecimento: "13", empresa: "BRASILATA", numero: "2896", fornecedor: "Integra", descricao: "Klassmatt", categoria: "Software", dataFim: "2027-04-30", responsavel: "Lucas Melo", suplente: "Guilherme" },
-    { estabelecimento: "491", empresa: "CIMEP", numero: "51", fornecedor: "Datanova", descricao: "Equipamentos", categoria: "Software", dataFim: "2026-07-01", responsavel: "Mayara", suplente: "Lucas" },
+    { estabelecimento: "491", empresa: "CIMEP", numero: "51", fornecedor: "Datanova", cnpjFornecedor: "12.345.678/0001-90", descricao: "Equipamentos", categoria: "Software", dataFim: "2026-07-01", responsavel: "Mayara", suplente: "Lucas" },
     { estabelecimento: "491", empresa: "CIMEP", numero: "52", fornecedor: "Datanova", descricao: "Suporte", categoria: "Consultoria", dataFim: "2026-12-30", responsavel: "Marcos Silva", suplente: "Lucas" }
 ];
 
 const fakeWindow = {
+    ContractsMapper: require("./contractsMapper.js"),
     contractsData: contracts,
     contractsDataMetadata: { records: 4, lastModifiedDateTime: "2026-08-03T14:00:00-03:00", lastCheckedAt: "2026-08-03T14:10:00-03:00" },
     SharePointContracts: { getAccount() { return null; } },
@@ -141,7 +142,7 @@ const context = vm.createContext({
     window: fakeWindow
 });
 
-const root = path.resolve(__dirname, "..");
+const root = __dirname;
 vm.runInContext(fs.readFileSync(path.join(root, "script.js"), "utf8"), context);
 const run = (code) => vm.runInContext(code, context);
 
@@ -170,4 +171,23 @@ run("clearAllContractFilters({ focus: false }); elements.sortFilter.value = 'sup
 assert.strictEqual(run("state.filteredContracts[0].fornecedor"), "BrasRede Telecom");
 
 assert.ok(run("highlightText('ESTÊNIO', 'estenio')").includes("<mark>ESTÊNIO</mark>"));
-console.log("Testes de pesquisa, filtros, status e ordenação passaram.");
+const mapper = require("./contractsMapper.js");
+assert.strictEqual(mapper.normalizeCNPJ("12.345.678/0001-90"), "12345678000190");
+assert.strictEqual(mapper.normalizeCNPJ(" 12.345.678/0001-90 "), "12345678000190");
+assert.strictEqual(mapper.normalizeCNPJ(null), "");
+for (const input of ["12.345.678/0001-90", "12345678000190", " 12.345.678/0001-90 "]) {
+    run(`clearAllContractFilters({ focus: false }); elements.cnpjFilter.value = ${JSON.stringify(input)}; applyContractFilters();`);
+    assert.strictEqual(run("state.filteredContracts.length"), 2, `CNPJ ${input} deve retornar ambos os contratos.`);
+}
+run("elements.contractSearchInput.value = 'sem correspondencia'; elements.statusFilter.value = 'vencido'; applyContractFilters();");
+assert.strictEqual(run("state.filteredContracts.length"), 2, "CNPJ deve ter prioridade sobre filtros preenchidos.");
+run("elements.cnpjFilter.value = '99999999000199'; applyContractFilters();");
+assert.strictEqual(run("state.filteredContracts.length"), 0);
+assert.ok(run("createEmptyStateText()").includes("Nenhum contrato encontrado para o CNPJ"));
+run("elements.cnpjFilter.value = '  '; applyContractFilters();");
+assert.strictEqual(run("state.filteredContracts.length"), 0, "Com CNPJ vazio, os demais filtros continuam ativos.");
+run("clearAllContractFilters({ focus: false }); elements.cnpjFilter.value = '61.160.438/0006-36'; applyContractFilters();");
+assert.strictEqual(run("state.filteredContracts.length"), 1, "CNPJ da contratante também deve ser pesquisável.");
+run("clearAllContractFilters({ focus: false }); elements.contractSearchInput.value = 'estenio'; applyContractFilters();");
+assert.strictEqual(run("state.filteredContracts.length"), 1, "Pesquisa antiga permanece funcional.");
+console.log("Testes de pesquisa, CNPJ, filtros, status e ordenação passaram.");

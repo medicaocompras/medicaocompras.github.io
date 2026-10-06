@@ -154,6 +154,10 @@
                             <div id="advancedFilters" class="advanced-filters">
                                 <div class="contract-filter-grid">
                                     <div class="filter-field">
+                                        <label for="cnpjFilter">CNPJ</label>
+                                        <input id="cnpjFilter" type="search" inputmode="numeric" placeholder="CNPJ do fornecedor ou contratante" autocomplete="off" aria-describedby="contractSearchHelp">
+                                    </div>
+                                    <div class="filter-field">
                                         <label for="responsibleFilter">Responsável</label>
                                         <select id="responsibleFilter"><option value="">Todos os responsáveis</option></select>
                                     </div>
@@ -178,7 +182,7 @@
                                 </div>
 
                                 <div class="contract-filter-footer">
-                                    <span id="contractSearchHelp">A pesquisa aceita texto parcial e ignora acentos. “Próximo do vencimento” significa até 90 dias.</span>
+                                    <span id="contractSearchHelp">A pesquisa aceita texto parcial e ignora acentos. O CNPJ aceita números com ou sem pontuação e tem prioridade sobre os demais filtros. “Próximo do vencimento” significa até 90 dias.</span>
                                     <button id="clearContractFilters" class="button button-secondary button-small" type="button">Limpar filtros</button>
                                 </div>
                             </div>

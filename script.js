@@ -20,6 +20,7 @@ const elements = {
     loadVideoButton: document.getElementById("loadVideoButton"),
     contractFilters: document.getElementById("contractFilters"),
     contractSearchInput: document.getElementById("contractSearchInput"),
+    cnpjFilter: document.getElementById("cnpjFilter"),
     clearContractSearch: document.getElementById("clearContractSearch"),
     clearContractFilters: document.getElementById("clearContractFilters"),
     emptyStateClearFilters: document.getElementById("emptyStateClearFilters"),
@@ -287,7 +288,8 @@ function preserveFilterValues() {
         establishment: elements.establishmentFilter.value,
         category: elements.categoryFilter.value,
         sort: elements.sortFilter.value,
-        search: elements.contractSearchInput.value
+        search: elements.contractSearchInput.value,
+        cnpj: elements.cnpjFilter.value
     };
 }
 
@@ -300,6 +302,7 @@ function restorePreservedFilterValues(values) {
     };
 
     elements.contractSearchInput.value = values.search || "";
+    elements.cnpjFilter.value = values.cnpj || "";
     setIfAvailable(elements.responsibleFilter, values.responsible);
     setIfAvailable(elements.statusFilter, values.status);
     setIfAvailable(elements.establishmentFilter, values.establishment);
@@ -451,6 +454,7 @@ function updateUrlState() {
     const parameters = {
         view: state.activeView === "tutorial" ? "tutorial" : "",
         q: elements.contractSearchInput.value.trim(),
+        cnpj: elements.cnpjFilter.value.trim(),
         responsible: elements.responsibleFilter.value,
         status: elements.statusFilter.value,
         establishment: elements.establishmentFilter.value,
@@ -713,6 +717,7 @@ function restoreFiltersFromUrl() {
     };
 
     elements.contractSearchInput.value = getUrlParameter("q");
+    elements.cnpjFilter.value = getUrlParameter("cnpj");
     setIfAvailable(elements.responsibleFilter, getUrlParameter("responsible"));
     setIfAvailable(elements.statusFilter, getUrlParameter("status"));
     setIfAvailable(elements.establishmentFilter, getUrlParameter("establishment"));
@@ -820,6 +825,7 @@ function sortContracts(contracts) {
 
 function getFilteredContracts({ ignoreStatus = false } = {}) {
     const normalizedSearch = normalizeText(elements.contractSearchInput.value);
+    const normalizedCNPJ = window.ContractsMapper.normalizeCNPJ(elements.cnpjFilter.value);
     const responsible = normalizeText(elements.responsibleFilter.value);
     const selectedStatus = elements.statusFilter.value;
     const establishment = normalizeText(elements.establishmentFilter.value);
@@ -827,6 +833,13 @@ function getFilteredContracts({ ignoreStatus = false } = {}) {
 
     const contracts = getContracts().filter((contract) => {
         const status = getContractStatus(contract);
+
+        // CNPJ identifica o contrato mesmo quando outros campos ficaram preenchidos.
+        if (normalizedCNPJ) {
+            return [contract.cnpjFornecedor, contract.cnpjEmpresa].some(
+                (value) => window.ContractsMapper.normalizeCNPJ(value) === normalizedCNPJ
+            );
+        }
 
         return (
             contractMatchesSearch(contract, normalizedSearch) &&
@@ -1024,6 +1037,7 @@ function clearContractSearch() {
 function clearAllContractFilters({ focus = true, updateUrl = true } = {}) {
     clearTimeout(state.contractSearchTimer);
     elements.contractSearchInput.value = "";
+    elements.cnpjFilter.value = "";
     elements.responsibleFilter.value = "";
     elements.statusFilter.value = "";
     elements.establishmentFilter.value = "";
@@ -1047,6 +1061,9 @@ function createEmptyStateText() {
     const parts = [];
     const query = elements.contractSearchInput.value.trim();
 
+    if (elements.cnpjFilter.value.trim()) {
+        return `Nenhum contrato encontrado para o CNPJ “${elements.cnpjFilter.value.trim()}”. Confira os números informados.`;
+    }
     if (query) parts.push(`a pesquisa “${query}”`);
     if (elements.responsibleFilter.value) parts.push(`o responsável “${elements.responsibleFilter.value}”`);
     if (elements.statusFilter.value) parts.push(`o status “${getSelectedOptionText(elements.statusFilter)}”`);
@@ -1068,6 +1085,9 @@ function getActiveFilters() {
     const filters = [];
     const query = elements.contractSearchInput.value.trim();
 
+    if (elements.cnpjFilter.value.trim()) {
+        return [{ key: "cnpj", label: `CNPJ: ${elements.cnpjFilter.value.trim()}` }];
+    }
     if (query) filters.push({ key: "search", label: `Pesquisa: ${query}` });
     if (elements.responsibleFilter.value) filters.push({ key: "responsible", label: `Responsável: ${elements.responsibleFilter.value}` });
     if (elements.statusFilter.value) filters.push({ key: "status", label: `Status: ${getSelectedOptionText(elements.statusFilter)}` });
@@ -1099,6 +1119,7 @@ function renderActiveFilters() {
 function removeFilter(key) {
     const elementByKey = {
         search: elements.contractSearchInput,
+        cnpj: elements.cnpjFilter,
         responsible: elements.responsibleFilter,
         status: elements.statusFilter,
         establishment: elements.establishmentFilter,
@@ -1398,6 +1419,7 @@ function bindEvents() {
     elements.refreshContractsButton.addEventListener("click", () => refreshContracts({ force: true }));
     elements.contractFilters.addEventListener("submit", (event) => event.preventDefault());
     elements.contractSearchInput.addEventListener("input", handleContractSearch);
+    elements.cnpjFilter.addEventListener("input", handleContractSearch);
     elements.clearContractSearch.addEventListener("click", clearContractSearch);
     elements.clearContractFilters.addEventListener("click", () => clearAllContractFilters());
     elements.emptyStateClearFilters.addEventListener("click", () => clearAllContractFilters());

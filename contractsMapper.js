@@ -29,6 +29,10 @@
         return text || null;
     }
 
+    function normalizeCNPJ(value) {
+        return String(value ?? "").replace(/\D/g, "");
+    }
+
     function normalizeIdentifier(value) {
         if (value === null || value === undefined || value === "") return null;
 
@@ -312,6 +316,7 @@
         EXPECTED_COLUMNS,
         cleanText,
         normalizeIdentifier,
+        normalizeCNPJ,
         normalizeNumber,
         dateToIso,
         findHeaderRowIndex,
